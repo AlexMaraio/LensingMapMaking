@@ -1,0 +1,11 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 3.0)
+PROJECT(thingy CXX)
+
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ofast -march=native -Wall -Wextra -fPIC")
+
+
+ADD_LIBRARY(thingy SHARED alm_to_cl.cpp)
+
+
+TARGET_COMPILE_OPTIONS(thingy PRIVATE -std=c++17)
+
