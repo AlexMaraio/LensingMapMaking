@@ -57,11 +57,13 @@ if __name__ == '__main__':
 
     non_linear.set_flask_executable('~/Documents/PhD/Codes/flask/bin/flask')
 
-    non_linear.run_flask()
+    # * non_linear.run_flask()
+
+    non_linear.multiple_run_flask(250)
 
     # ! non_linear.estimate_cl_from_alm()
 
-    non_linear.trim_flask_alm_output()
-    non_linear.use_cpp_thingy()
+    # ! non_linear.trim_flask_alm_output()
+    # ! non_linear.use_cpp_thingy()
 
-    non_linear.plot_flask_output()
+    # * non_linear.plot_flask_output()

@@ -1,9 +1,11 @@
 import os
 import subprocess
+import random
 import pathlib
 import time
 import ctypes
 import numpy as np
+from scipy import special as scispec
 import pandas as pd
 import camb
 import healpy as hp
@@ -17,30 +19,52 @@ from .Planck_colourmap import make_planck_colour_map
 class CambObject:
 
     def __init__(self, folder_path, lmax, non_linear=True):
-        # TODO: a rework of data sorting in folders
+        """
+        General class that contains functions necessary to first compute the lensing power spectra for a given
+        cosmology, save this power spectrum to the disk, input this spectra into Flask, run Flask multiple times
+        to obtain multiple realisations of the Cl coefficients, and plotting the results.
+
+        Args:
+            folder_path (str): String that identifies where output data should be stored under the ./Data/ sub-directory.
+            lmax (int): Integer specifying the maximum l value that the lensing power spectrum should be computed to.
+            non_linear (bool): Boolean value which indicates if we want to evaluate the non-linear
+                               matter power spectrum (and thus the non-linear lensing spectrum)
+        """
+
+        # Set the path to where we will be storing data related to this class
         self.folder_path = 'Data/' + folder_path + '/'
+
+        # If this folder doesn't already exist, then create it
         if not os.path.isdir(self.folder_path):
             os.makedirs(self.folder_path)
 
+        # Store our ell_max and non_linear parameters in the class
         self.ell_max = lmax
         self.non_linear = non_linear
 
+        # Create a vector which stores the ell values which the power spectrum will be evaulated over
         self.ells = np.arange(2, lmax + 1)
 
+        # Create a CAMB parameters object in the class, and set the default cosmology.
+        # TODO: consider changing the cosmology?
         self.params = camb.CAMBparams()
         self.params.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112)
         self.params.InitPower.set_params(As=2.1E-9, ns=0.96)
         self.params.set_for_lmax(self.ell_max, lens_potential_accuracy=1)
 
+        # Computing the CMB power spectrum is useful as it allows us to plot the TT power spectrum too
         self.params.Want_CMB = True
 
+        # If we're doing a non-linear evaulation, then get CAMB to use non-linear models
         if self.non_linear:
             self.params.NonLinear = camb.model.NonLinear_both
             self.params.set_nonlinear_lensing(True)
 
+        # Else, stick to the linear regime
         else:
             self.params.set_nonlinear_lensing(False)
 
+        # Class members which we will store calculation results in
         self.window_functions = None
         self.num_redshift_bins = None
         self.results = None
@@ -48,6 +72,7 @@ class CambObject:
         self.raw_c_ells = None
         self.camb_output_filename = None
 
+        # Information about Flask
         self.flask_executable = None
         self.flask_executed = False
 
@@ -208,8 +233,8 @@ class CambObject:
 
         file.write('## Simulation basics ##\n\n')
         file.write('DIST: \t GAUSSIAN \n')
-        file.write('RNDSEED: \t 315 \n')  # TODO: change this randomly?!
-        file.write('POISSON: \t 1 \n')
+        file.write('RNDSEED: \t ' + str(random.randint(1, 10000)) + ' \n')  # TODO: change this randomly?!
+        file.write('POISSON: \t 0 \n')
 
         file.write('\n## Cosmology ##\n\n')
         file.write('OMEGA_m: \t 0.3 \n')
@@ -225,7 +250,7 @@ class CambObject:
         file.write('ALLOW_MISS_CL: \t 0 \n')
         file.write('SCALE_CLS: \t 1.0 \n')
         file.write('WINFUNC_SIGMA: \t -1 \n')
-        file.write('APPLY_PIXWIN: \t 0 \n')  # TODO: changed this
+        file.write('APPLY_PIXWIN: \t 0 \n')  # * changed this
         file.write('SUPPRESS_L: \t -1 \n')
         file.write('SUP_INDEX: \t -1 \n\n')
 
@@ -242,7 +267,7 @@ class CambObject:
         file.write('LRANGE: \t 2 ' + str(self.ell_max) + '\n')
         file.write('CROP_CL: \t 0 \n')
         file.write('SHEAR_LMAX: \t' + str(self.ell_max) + '\n')
-        file.write('NSIDE: \t 2048 \n')  # TODO: change this?!
+        file.write('NSIDE: \t 2048 \n')  # TODO: change this dynamically
         file.write('USE_HEALPIX_WGTS: \t 1 \n\n')
 
         file.write('\n## Covariance matrix regularisation##\n\n')
@@ -256,7 +281,7 @@ class CambObject:
         file.write('ZSEARCH_TOL: \t 0.0001 \n\n')
 
         file.write('\n## Output ##\n\n')
-        file.write('EXIT_AT: \t 0 \n')
+        file.write('EXIT_AT: \t RECOVCLS_OUT \n')
         file.write('FITS2TGA: \t 0 \n')
         file.write('USE_UNSEEN: \t 1 \n')
         file.write('LRANGE_OUT: \t 2 ' + str(self.ell_max) + '\n')
@@ -265,29 +290,51 @@ class CambObject:
         file.write('DENS2KAPPA: \t 0 \n')
 
         file.write('FLIST_OUT: \t 0 \n')
-        file.write('SMOOTH_CL_PREFIX: \t Output-smoothed-cl- \n')
+        file.write('SMOOTH_CL_PREFIX: \t 0 \n')  # * Output-smoothed-cl-
         file.write('XIOUT_PREFIX: \t 0 \n')
         file.write('GXIOUT_PREFIX: \t 0 \n')
         file.write('GCLOUT_PREFIX: \t 0 \n')
         file.write('COVL_PREFIX: \t 0 \n')
         file.write('REG_COVL_PREFIX: \t 0 \n')
-        file.write('REG_CL_PREFIX: \t Output-Reg-Cl- \n')  # Changed this
+        file.write('REG_CL_PREFIX: \t 0 \n')  # * Output-Reg-Cl-
         file.write('CHOLESKY_PREFIX: \t 0 \n')
         file.write('AUXALM_OUT: \t 0 \n')  # TODO: change this?!
         file.write('RECOVAUXCLS_OUT: \t 0 \n')
         file.write('AUXMAP_OUT: \t 0 \n')
         file.write('DENS2KAPPA_STAT: \t 0 \n')
-        file.write('MAP_OUT: \t 0 \n')
+
+        write_map = False
+
+        if write_map:
+            file.write('MAP_OUT: \t Output-Map.txt \n')
+        else:
+            file.write('MAP_OUT: \t 0 \n')
+
         file.write('RECOVALM_OUT: \t 0 \n')
-        file.write('RECOVCLS_OUT: \t 0 \n')
-        file.write('SHEAR_ALM_PREFIX: \t Output-shear-alm- \n')
+        file.write('RECOVCLS_OUT: \t Output-Cl.dat \n')
 
-        file.write('MAPFITS_PREFIX: \t Output-converg-map- \n')
-        file.write('SHEAR_FITS_PREFIX: \t Output-shear-map- \n')
-        file.write('MAPWERFITS_PREFIX: \t Output-poisson-map- \n')
-        file.write('ELLIPFITS_PREFIX: \t Output-ellip-map- \n')
+        write_shear_alm = False
+        write_shear_fits = False
+        write_shear_map = False
 
-        file.write('SHEAR_MAP_OUT: \t 0 \n')
+        if write_shear_alm:
+            file.write('SHEAR_ALM_PREFIX: \t Output-shear-alm- \n')
+        else:
+            file.write('SHEAR_ALM_PREFIX: \t 0 \n')
+
+        if write_shear_fits:
+            file.write('SHEAR_FITS_PREFIX: \t Output-shear-map-fits- \n')
+        else:
+            file.write('SHEAR_FITS_PREFIX: \t 0 \n')
+
+        if write_shear_map:
+            file.write('SHEAR_MAP_OUT: \t Output-shear-map.dat \n')
+        else:
+            file.write('SHEAR_MAP_OUT: \t 0 \n')
+
+        file.write('MAPFITS_PREFIX: \t 0 \n')  # * Output-converg-map-
+        file.write('MAPWERFITS_PREFIX: \t 0 \n')  # * Output-poisson-map-
+        file.write('ELLIPFITS_PREFIX: \t 0 \n')  # * Output-ellip-map-
         file.write('MAPWER_OUT: \t 0 \n')
         file.write('ELLIP_MAP_OUT: \t 0 \n')
         file.write('CATALOG_OUT: \t 0 \n')
@@ -296,20 +343,37 @@ class CambObject:
 
         file.close()
 
-    def run_flask(self):
+    def run_flask(self, use_rnd=None):
+        """
+        Function that runs the Flask executable on an already existing Flask input .ini file
+
+        Args:
+            use_rnd (bool): Flag which, when enabled, generates a new random number to be used as Flask's random
+                            number seed - which allows the same input .ini file to generate multiple different spectra
+
+        Returns:
+            None: All data is written to the disk by Flask
+        """
+        # Check that the Flask executable path exists before running it
         if self.flask_executable is None:
             raise RuntimeError('Please first set the location of the Flask executable before running it!')
 
-        print('Running Flask')
+        if not os.path.isfile(self.folder_path + 'FlaskInput.ini'):
+            print('The Flask input file has not been previously generated, making one now')
+            self.write_flask_config_file()
 
+        print('\nRunning Flask')
+
+        # Time how long it takes Flask to run
         start_time = time.time()
 
-        # TODO: consider using a random, random number here for the RNDSEED value as this may introduce differences
-        #  between the runs?
+        # Execute Flask as a subprocess run from the shell.
+        command = subprocess.run(str(self.flask_executable) + ' FlaskInput.ini ' +
+                                 'RNDSEED: ' + str(random.randint(1, 1000000)) if use_rnd is not None else '',
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
+                                 cwd=self.folder_path, shell=True)
 
-        command = subprocess.run([str(self.flask_executable), 'FlaskInput.ini'], stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE, universal_newlines=True, cwd=self.folder_path)
-
+        # If Flask ran successfully, save it's output as a file
         if command.returncode == 0:
             print('Flask ran successfully :)')
             print('Flask took {num:.2f} seconds to run'.format(num=time.time() - start_time))
@@ -320,6 +384,7 @@ class CambObject:
             output_file.write(command.stdout)
             output_file.close()
 
+        # Else, there was an error somewhere, print this error and exit the program
         else:
             print('Flask did not run successfully, hopefully the error is contained below')
             print(command.stdout)
@@ -327,18 +392,98 @@ class CambObject:
 
             raise RuntimeError('Flask did not run successfully! :(')
 
+    def multiple_run_flask(self, num_runs):
+        """
+        Function that runs Flask code multiple times to compute an average of the Cl values
+
+        Args:
+            num_runs (int): Number of times to run the Flask code
+
+        Returns:
+            None
+        """
+
+        # List for the list of Cl's for each run to be appended into
+        cls = []
+
+        # Run Flask the given number of times to generate a power spectra each time
+        for run_num in range(num_runs):
+            self.run_flask(use_rnd=True)
+
+            # Read in the new power spectrum
+            cl_df = pd.read_csv(self.folder_path + 'Output-Cl.dat', header=None,
+                                names=['ell', 'Cl-f1z1f1z1', 'Cl-f1z1f1z2', 'Cl-f1z2f1z2'], sep=r'\s+', skiprows=1)
+
+            # Extract the Cl's and append them to the existing list.
+            # Note: we normalise through ell (ell + 1) / 2 pi now.
+            cls.append(cl_df['Cl-f1z2f1z2'] * self.ells * (self.ells + 1) / (2 * np.pi))
+
+        mean_cls = []
+        var_cls = []
+
+        # Here, we want to find what the average and variance of the Cl's are at each ell
+        for ell in range(0, self.ell_max-1):
+            cls_at_ell = []
+            for cl in cls:
+                cls_at_ell.append(cl[ell])
+
+            # Calculate the mean and append it to our list
+            mean_val = np.mean(cls_at_ell)
+            mean_cls.append(np.mean(cls_at_ell))
+
+            # Calculate the variance, normalise it through the mean value squared, and append it to our list
+            var_cls.append(np.var(cls_at_ell) / (mean_val * mean_val))
+
+        # Print the raw data for each Cl dataset - very messy but gets the point across
+        plt.figure(figsize=(13, 7))
+        for cl in cls:
+            plt.loglog(self.ells, cl, alpha=0.5, linewidth=0.75)
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
+        plt.loglog(self.ells, mean_cls, lw=2, color='blue', label=r'Average $C_\ell$')
+        plt.legend()
+        plt.tight_layout()
+        plt.show(block=False)
+
+        # Now plot the variance of the Cl's with the expected values from the Cosmic variance
+        plt.figure(figsize=(13, 7))
+        plt.loglog(self.ells, var_cls, lw=2, color='purple', label='Data')
+        plt.loglog(self.ells, 2 / (2 * self.ells + 1), color='blue', label='Cosmic variance')
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\textrm{Var}[C_\ell] / \textrm{Avg}[C_\ell]^2$')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
     @staticmethod
     def get_file_num_lines(input_file):
+        """
+        Function to get the number of lines for a given input file
+
+        Args:
+            input_file (str): Path to input file
+
+        Returns: (int) The number of lines
+        """
+
+        # Ensure that the file exists before opening it
+        if not os.path.isfile(input_file):
+            raise RuntimeError('Cannot find the given file path! Please check that the input is correct')
+
+        # Open the file in a read-only format
         with open(input_file, 'r') as f:
             for line_num, line in enumerate(f, 1):
                 pass
+
+        # Return
         return line_num
 
     def trim_flask_alm_output(self):
         """
         By default, Flask outputs the Alm file with a header.
         However, for this file to be read in by the C++ code we need to trim off this header.
-        :return:
+
+        :return: None
         """
 
         # Go through each redshift bin
@@ -366,7 +511,7 @@ class CambObject:
         """
         Function that reads in the alm values as outputted by Flask and converts them to Cl's
 
-        :return: None
+        :return: None, as we store the Cl information in the "self.my_cls" class property
         """
 
         # Go through each z bin
@@ -415,19 +560,14 @@ class CambObject:
 
         # Go through each redshift bin individually and make plots for each
         for z_bin in range(1, self.num_redshift_bins + 1):
-
             # Read in the generated shear map from Flask
-            maps = hp.read_map(self.folder_path + 'Output-shear-map-f1z' + str(z_bin) + '.fits', verbose=False,
+            maps = hp.read_map(self.folder_path + 'Output-shear-map-fits-f1z' + str(z_bin) + '.fits', verbose=False,
                                field=None)
 
             # Split the shae map into a convergence, shear1, and shear2 maps
             converg_map = maps[0]
             shear_map1 = maps[1]
             shear_map2 = maps[2]
-
-            # converg_map = hp.read_map(self.folder_path + 'Output-shear-map-f1z' + str(z_bin) + '.fits', verbose=False)
-            # shear_map1 = hp.read_map(self.folder_path + 'Output-shear-map-f1z' + str(z_bin) + '.fits', verbose=False, field=None)[1]
-            # shear_map2 = hp.read_map(self.folder_path + 'Output-shear-map-f1z' + str(z_bin) + '.fits', verbose=False, field=None)[2]
 
             # Plot the convergence and shear1 maps
             hp.mollview(converg_map, cmap=planck_cmap, title='Convergence for redshift bin ' + str(z_bin))
@@ -438,13 +578,19 @@ class CambObject:
             # Use HealPy functions to turn the maps into Cl's
             start_time = time.time()
             converg_cl = hp.sphtfunc.anafast(converg_map, lmax=self.ell_max)
-            print('This took {sec} seconds'.format(sec=time.time() - start_time))
+            print('Converg took {sec} seconds'.format(sec=time.time() - start_time))
+
+            start_time = time.time()
             shear_cl1 = hp.sphtfunc.anafast(shear_map1, lmax=self.ell_max)
+            print('Shear1 took {sec} seconds'.format(sec=time.time() - start_time))
+
+            start_time = time.time()
             shear_cl2 = hp.sphtfunc.anafast(shear_map2, lmax=self.ell_max)
+            print('Shear2 took {sec} seconds'.format(sec=time.time() - start_time))
 
             flask_cl_df = pd.read_csv(
-                self.folder_path + 'Output-Reg-Cl-f1z' + str(z_bin) + 'f1z' + str(z_bin) + '.dat',
-                header=None, names=['ell', 'Cl'], sep=r'\s+')
+                    self.folder_path + 'Output-Reg-Cl-f1z' + str(z_bin) + 'f1z' + str(z_bin) + '.dat',
+                    header=None, names=['ell', 'Cl'], sep=r'\s+')
 
             # Plot various Cl's
             plt.figure(figsize=(12, 7))
@@ -452,11 +598,14 @@ class CambObject:
             plt.loglog(self.ells, self.ells * (self.ells + 1) * converg_cl[2:] / (2 * np.pi), label=r'$C_\ell$ converg')
             plt.loglog(self.ells, self.ells * (self.ells + 1) * shear_cl1[2:] / (2 * np.pi), label=r'$C_\ell$ shear 1')
             plt.loglog(self.ells, self.ells * (self.ells + 1) * shear_cl2[2:] / (2 * np.pi), label=r'$C_\ell$ shear 2')
-            plt.loglog(self.ells, self.ells * (self.ells + 1) * (shear_cl1[2:] + shear_cl2[2:]) / (2 * np.pi), label=r'$C_\ell$ shear 1 + 2', color='purple', lw=2)
+            plt.loglog(self.ells, self.ells * (self.ells + 1) * (shear_cl1[2:] + shear_cl2[2:]) / (2 * np.pi),
+                       label=r'$C_\ell$ shear 1 + 2', color='purple', lw=2)
             plt.loglog(self.ells, self.ells * (self.ells + 1) *
                        self.raw_c_ells['W' + str(z_bin) + 'x' + 'W' + str(z_bin)][2:] / (2 * np.pi),
                        label=r'$C_\ell$ input', lw=1.5, color='cyan')
-            plt.loglog(flask_cl_df['ell'], flask_cl_df['ell'] * (flask_cl_df['ell'] + 1) * flask_cl_df['Cl'] / (2 * np.pi), lw=2, color='navy', label='Cl from Flask')
+            plt.loglog(flask_cl_df['ell'],
+                       flask_cl_df['ell'] * (flask_cl_df['ell'] + 1) * flask_cl_df['Cl'] / (2 * np.pi), lw=2,
+                       color='navy', label='Cl from Flask')
             plt.title(r'$C_\ell$ for redshift bin ' + str(z_bin))
             plt.xlabel(r'$\ell$')
             plt.ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
@@ -514,3 +663,22 @@ class CambObject:
             # Store the cpp Cl's in the class
             self.my_cls_cpp.append(cls)
 
+    def use_cpp_map_to_alm(self):
+        # Load the C++ shared library file that has already been compiled.
+        lib = ctypes.CDLL('/home/amaraio/Documents/PhD/Codes/LensingMapMaking/lib/cpp/thingy.so')
+
+        # Sets the arguments of the map_to_alm function as a char pointer
+        lib.alm_to_cl.argtypes = [ctypes.c_char_p]
+
+        # Set up the path variable that gets passed to the C++ code for reading in the data
+        # Note that we have to use a "bytes" string for it to be read correctly
+        file_path = ctypes.c_char_p(
+                b'/home/amaraio/Documents/PhD/Codes/LensingMapMaking/Data/Non-linear/Output-shear-map.dat')
+
+        start_time = time.time()
+
+        # Hand off to the C++ code
+        lib.map_to_alm(file_path)
+
+        # See how long it took
+        print('My cpp map to alm calculation took {num:.2f} seconds'.format(num=time.time() - start_time))
