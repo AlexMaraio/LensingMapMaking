@@ -102,3 +102,84 @@ Plotted below is the variance of the _Cl_'s divided by the average _Cl_ squared,
 which we see follows the data exactly.
 
 ![plot of many flask runs](figures/many_flask_runs_variance.png)
+
+## Investigating the distribution of the _Cl_ values
+
+In the above plot, we found that the expected variance of the _Cl_ values almost exactly follows from the predictions
+from the cosmic variance. We now wish to go beyond the variance and look at more detailed properties of the _Cl_ values,
+how they change with _l_ and vary with each other.
+
+The first plot made is a square plot of the _Cl_ values for  selected _l_. Here, we see that the 1D distribution looks
+quite non-Gaussian for low _l_, as the distribution looks more like a Poisson distribution as it peaks early at low values
+but has a long tail to high values. We see that as _l_ increases, the 1D distributions gradually approach a Gaussian.  
+These 1D distribution properties are reflected in the two-dimensional contour and scatter plots on the off-diagonal corners.
+For low _l_, the contours are concentrated at low values, with an asymmetric tail to higher values. For large _l_, we see
+that the contours are quite circular, which indicates that each _Cl_ value is independent of each other.
+
+![square plot of Cl values](figures/Cl_SquarePlot.png)
+
+Note that we needed to multiply all _Cl_ values by 1E7 to get the KDE contours to generate correctly.
+
+Since we are dealing with vary many different sets of _Cl_ values it is useful to introduce new terminology.
+For a given set of _alm_ values we can construct an *estimator* for the _true_ _Cl_ value, as  
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=\hat{C}_\ell = \frac{1}{2 \ell %2B 1} \sum_m |a_{lm}|^2." height=40> 
+</center>
+
+If we average this estimator over vary many independent maps, then we should recover the true _Cl_ value
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=\langle \hat{C}_\ell \rangle = C_\ell." height=40> 
+</center>
+
+So while the individual _alm_ values are statistically independent and are random numbers drawn from a Gaussian
+distribution, the estimated _Cl_ values are **not** intrinsically Gaussian variables. Instead, they are drawn
+from a Γ distribution with mean _Cl_ and variance 2(2*l* + 1) \* Cl^2. For a reminder, the probability density function
+for the Γ distribution (*f*) is 
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=f(x%3B a,b) = \frac{x^{a-1} \, \exp (-x/b)}{b^a \Gamma(a)}," height=45> 
+</center>
+
+where Γ is the gamma function, _a_ is called the shape parameter and _b_ is the scale parameter. This distribution has
+a mean _ab_ and a variance _a(b_^2).
+
+In the limit of large _l_, this distribution approaches a Gaussian due to the central limit theorem, but it is not intrinsically a Gaussian. This effect is very noticeable at small _l_, as seen in the plots above and below.  
+As we wish to investigate the non-Gaussian behaviour of the estimated _Cl_ values at low _l_, we can plot the
+estimated _Cl_ distribution normalised to the mean from _l_ = 2 to _l_ = 25.
+
+![ridge plot of Cl values](figures/Cl_RidgePlot.png)
+Also plotted in light blue here is the expected curve of the Γ distribution for each _l_. We see very good agreement
+across all _l_ values, which shows that we have recovered the expected result that the estimated _Cl_ values follow
+the Γ distribution.
+
+### Skew
+
+We can quantify the skewness of the _Cl_ distribution by computing the skewness of the distribution, which is defined
+as the third moment of the data
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=\text{Skew} = \langle \left[ \frac{x_i - \mu}{\sigma} \right]^3 \rangle" height=45> 
+</center>
+
+where _μ_ is the mean and _σ_ is the standard deviation of the data.
+
+Plotting this as a function of _l_ for our data gives
+![skew plot of Cl values](figures/Cl_Skew.png)
+
+Here, we see that the skew is large and positive for low _l_ values, with it decreasing with _l_ - but staying above zero
+for most of the _l_ values. Plotted in purple is the expected values for the Γ  distribution, which has an exact value
+for the skew as (2 / sqrt(*a*)), which very accurately matches the data for the range _l_ ≳ 20 but underestimates the
+skew of the data at very small _l_.
+
+### Kurtosis
+
+Kurtosis is defined as the fourth moment of a data set, which is given as
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=\text{Kurt} = \langle \left[ \frac{x_i - \mu}{\sigma} \right]^4 \rangle" height=45> 
+</center>
+
+We can perform the same analysis as above but now for the kurtosis of the data and expected values from the Γ distribution.
+![Kurtosis plot of Cl values](figures/Cl_Kurtosis.png)
+Here, we also find that the expected values from the Γ distribution closely follow the data for the range _l_ ≳ 20,
+however we find a larger discrepancy between them for small _l_ than for the skew.
