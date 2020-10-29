@@ -5,15 +5,19 @@ import pathlib
 import time
 import ctypes
 import numpy as np
-from scipy import special as scispec
+from scipy import stats as scistats
 import pandas as pd
 import camb
 import healpy as hp
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 from .flask_scripts.prepCambInput import split_files
 from .flask_scripts.camb2info import XavierShift
 from .Planck_colourmap import make_planck_colour_map
+
+
+sns.set(font_scale=1.75, rc={'text.usetex': True})
 
 
 class CambObject:
@@ -25,13 +29,14 @@ class CambObject:
         to obtain multiple realisations of the Cl coefficients, and plotting the results.
 
         Args:
-            folder_path (str): String that identifies where output data should be stored under the ./Data/ sub-directory.
+            folder_path (str): String that identifies where output data should be stored under the ./Data/ sub-directory
             lmax (int): Integer specifying the maximum l value that the lensing power spectrum should be computed to.
             non_linear (bool): Boolean value which indicates if we want to evaluate the non-linear
                                matter power spectrum (and thus the non-linear lensing spectrum)
         """
 
         # Set the path to where we will be storing data related to this class
+        self.name = folder_path
         self.folder_path = 'Data/' + folder_path + '/'
 
         # If this folder doesn't already exist, then create it
@@ -55,14 +60,21 @@ class CambObject:
         # Computing the CMB power spectrum is useful as it allows us to plot the TT power spectrum too
         self.params.Want_CMB = True
 
-        # If we're doing a non-linear evaulation, then get CAMB to use non-linear models
+        # If we're doing a non-linear evaluation, then get CAMB to use non-linear models
         if self.non_linear:
             self.params.NonLinear = camb.model.NonLinear_both
             self.params.set_nonlinear_lensing(True)
 
+            # * This can be used to change the version of HaloFit from which the non-linear spectrum is computed from
+            self.params.NonLinearModel.set_params(halofit_version='mead')
+
         # Else, stick to the linear regime
         else:
             self.params.set_nonlinear_lensing(False)
+
+        # Dark energy parameters
+        self.w0 = -1
+        self.wa = 0
 
         # Class members which we will store calculation results in
         self.window_functions = None
@@ -79,6 +91,27 @@ class CambObject:
         # A list that holds a list for each redshift bin of the Cl's computed by me
         self.my_cls = []
         self.my_cls_cpp = []
+
+    def set_dark_energy(self, w_0=-1, w_a=0):
+        """
+        Function to set the dark energy equation-of-state parameters. This includes the time evolution of the equation-
+        of-state through the formulation
+            w(a) = w0 + wa(1 − a)
+
+        Args:
+            w_0 (float): The w_0 parameter in the model
+            w_a (float): The w_a parameter in the model
+
+        Returns:
+            None
+        """
+
+        # Update class parameters
+        self.w0 = w_0
+        self.wa = w_a
+
+        # Update CAMB DarkEnergy model
+        self.params.DarkEnergy = camb.dark_energy.DarkEnergyFluid(w=w_0, wa=w_a)
 
     def set_flask_executable(self, path):
         """
@@ -121,14 +154,14 @@ class CambObject:
 
     def compute_c_ells(self):
         start_time = time.time()
-        print('Running CAMB')
+        print('Running CAMB for model: ', self.name)
 
         self.results = camb.get_results(self.params)
         self.c_ells = self.results.get_source_cls_dict(lmax=self.ell_max)
         self.raw_c_ells = self.results.get_cmb_unlensed_scalar_array_dict(lmax=self.ell_max, raw_cl=True,
                                                                           CMB_unit='muK')
 
-        print('CAMB finished in {num:.2f} seconds'.format(num=time.time() - start_time))
+        print('CAMB finished in {num:.2f} seconds for model {mdl}'.format(num=time.time() - start_time, mdl=self.name))
 
     def get_c_ells_dict(self, key=None):
         if self.c_ells is None:
@@ -222,7 +255,16 @@ class CambObject:
 
         file.close()
 
-    def write_flask_config_file(self):
+    def write_flask_config_file(self, n_side=2048):
+        """
+        Function that writes a Flask configuration file to the disk
+
+        Args:
+            n_side (int): The N_side parameter that is used to construct the maps in Flask
+
+        Returns: None
+
+        """
         filename = 'FlaskInput.ini'
         filename = self.folder_path + filename
 
@@ -240,8 +282,8 @@ class CambObject:
         file.write('OMEGA_m: \t 0.3 \n')
         file.write('OMEGA_L: \t 0.7 \n')
         file.write('W_de: \t -1.0 \n\n')
-        file.write('ELLIP_SIGMA: \t 0.11 \n')
-        file.write('GALDENSITY: \t 30 \n\n')
+        file.write('ELLIP_SIGMA: \t 0.21 \n')  # Intrinsic galaxy dispersion taken from 2010.12382
+        file.write('GALDENSITY: \t 30 \n\n')  # Average surface density of galaxies for Euclid, same paper
 
         file.write('\n## Input data ## \n\n')
         file.write('FIELDS_INFO: \t fields_info.ini \n')
@@ -267,7 +309,7 @@ class CambObject:
         file.write('LRANGE: \t 2 ' + str(self.ell_max) + '\n')
         file.write('CROP_CL: \t 0 \n')
         file.write('SHEAR_LMAX: \t' + str(self.ell_max) + '\n')
-        file.write('NSIDE: \t 2048 \n')  # TODO: change this dynamically
+        file.write('NSIDE: \t ' + str(n_side) + ' \n')
         file.write('USE_HEALPIX_WGTS: \t 1 \n\n')
 
         file.write('\n## Covariance matrix regularisation##\n\n')
@@ -369,7 +411,7 @@ class CambObject:
 
         # Execute Flask as a subprocess run from the shell.
         command = subprocess.run(str(self.flask_executable) + ' FlaskInput.ini ' +
-                                 'RNDSEED: ' + str(random.randint(1, 1000000)) if use_rnd is not None else '',
+                                 ('RNDSEED: ' + str(random.randint(1, 1000000)) if use_rnd is not None else ''),
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
                                  cwd=self.folder_path, shell=True)
 
@@ -406,6 +448,12 @@ class CambObject:
         # List for the list of Cl's for each run to be appended into
         cls = []
 
+        # Time how long the total runs took
+        start_time = time.time()
+
+        # Dataframe that we will store the data into after each run
+        data_dfs = []
+
         # Run Flask the given number of times to generate a power spectra each time
         for run_num in range(num_runs):
             self.run_flask(use_rnd=True)
@@ -418,32 +466,120 @@ class CambObject:
             # Note: we normalise through ell (ell + 1) / 2 pi now.
             cls.append(cl_df['Cl-f1z2f1z2'] * self.ells * (self.ells + 1) / (2 * np.pi))
 
+            # Strip any spaces out of the column names
+            cl_df.columns = cl_df.columns.str.lstrip()
+
+            # Get the ell values as a numpy array
+            ells = cl_df['ell'].to_numpy()
+
+            # Get the c_ell values normalised by ell(ell+1)/2pi, as usual
+            c_ells = cl_df['Cl-f1z2f1z2'].to_numpy() * self.ells * (self.ells + 1) / (2 * np.pi)
+
+            # Create a new dummy dataframe with out C_ell values, with an index determined by the ell values
+            cl_df = pd.DataFrame({'Cl': c_ells}, index=ells)
+
+            # Append the transpose of the current data frame to the list
+            data_dfs.append(cl_df.transpose())
+
+        # Concatenate the all the data frames together into a single output data frame
+        data_df = pd.concat(data_dfs, ignore_index=True)
+
+        # Prints timing statistics
+        print('The total time for the runs was {num:.3f} seconds, with an average of {numpersec:.3f} seconds/run'
+              .format(num=time.time() - start_time, numpersec=(time.time() - start_time)/num_runs))
+
+        # Save the data which can then be read in later
+        data_df.to_csv(self.folder_path + 'AggregateCls1.csv', index=False)
+
+        # Hand off to the plotting function which plots the output data
+        self.plot_multiple_run_data()
+
+    def plot_multiple_run_data(self):
+        """
+        Function that plots data that has been calculated for multiple runs of Flask
+
+        Returns: None
+        """
+        # Import the previously saved data
+        data_df = pd.read_csv(self.folder_path + 'AggregateCls1.csv')
+        data_df_kde = pd.read_csv(self.folder_path + 'AggregateCls1.csv')
+
+        print('Total number of samples here is: ' + str(len(data_df)))
+
+        # Lists where computed data will be stored into
         mean_cls = []
         var_cls = []
+        skew_cls = []
+        kurt_cls = []
 
         # Here, we want to find what the average and variance of the Cl's are at each ell
-        for ell in range(0, self.ell_max-1):
-            cls_at_ell = []
-            for cl in cls:
-                cls_at_ell.append(cl[ell])
+        for label, c_ells in data_df.items():
 
             # Calculate the mean and append it to our list
-            mean_val = np.mean(cls_at_ell)
-            mean_cls.append(np.mean(cls_at_ell))
+            mean_val = np.mean(c_ells)
+            mean_cls.append(np.mean(c_ells))
 
             # Calculate the variance, normalise it through the mean value squared, and append it to our list
-            var_cls.append(np.var(cls_at_ell) / (mean_val * mean_val))
+            var_cls.append(np.var(c_ells) / (mean_val * mean_val))
+
+            # Also calculate the skew and kurtosis and append them to the lists too
+            skew_cls.append(scistats.skew(np.array(c_ells), bias=False))
+            kurt_cls.append(scistats.kurtosis(np.array(c_ells), bias=False))
+
+        # Get the keys of the data frame
+        keys = data_df.keys()
+
+        # Plot the raw data on a gird with scatter and histograms
+        grid1 = sns.PairGrid(data_df, vars=[keys[0], keys[2], keys[23], keys[98], keys[498], keys[1498]])
+        grid1.map_diag(sns.histplot)
+        grid1.map_lower(sns.histplot)
+        grid1.map_upper(sns.scatterplot)
+        plt.show(block=False)
+
+        # In order to plot a KDE, we need to increase the size of the values in order to make them order-unity
+        for idx in range(len(keys)):
+            data_df_kde[data_df_kde.keys()[idx]] = (data_df_kde[data_df_kde.keys()[idx]] * 1E7)
+
+        grid2 = sns.PairGrid(data_df_kde, vars=[keys[0], keys[2], keys[8], keys[23], keys[98], keys[498], keys[1498]])
+        grid2.map_diag(sns.histplot)
+        grid2.map_lower(sns.kdeplot, shade=True, levels=4)
+        grid2.map_upper(sns.histplot)
+        grid2.tight_layout()
+        plt.show(block=False)
 
         # Print the raw data for each Cl dataset - very messy but gets the point across
         plt.figure(figsize=(13, 7))
-        for cl in cls:
+        for cl in data_df.itertuples(index=False):
             plt.loglog(self.ells, cl, alpha=0.5, linewidth=0.75)
         plt.xlabel(r'$\ell$')
         plt.ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
         plt.loglog(self.ells, mean_cls, lw=2, color='blue', label=r'Average $C_\ell$')
         plt.legend()
         plt.tight_layout()
-        plt.show(block=False)
+
+        # Also plot the skew
+        plt.figure(figsize=(13, 7))
+
+        # Plot the skew
+        plt.semilogx(self.ells, skew_cls, lw=1, color='b', label='Data')
+
+        # Plot the expected skew for a Gamma distribution
+        k = (2 * self.ells + 1) / 2
+        plt.semilogx(self.ells, 2 / np.sqrt(k), color='purple', lw=2, label=r'$\Gamma$ function prediction')
+
+        plt.title('Skew')
+        plt.xlabel(r'$\ell$')
+        plt.legend()
+        plt.tight_layout()
+
+        # And kurtosis
+        plt.figure(figsize=(13, 7))
+        plt.semilogx(self.ells, kurt_cls, lw=1, color='b', label='Data')
+        plt.semilogx(self.ells, 6 / k, color='purple', lw=2, label=r'$\Gamma$ function prediction')
+        plt.title('Kurtosis')
+        plt.xlabel(r'$\ell$')
+        plt.legend()
+        plt.tight_layout()
 
         # Now plot the variance of the Cl's with the expected values from the Cosmic variance
         plt.figure(figsize=(13, 7))
@@ -453,6 +589,88 @@ class CambObject:
         plt.ylabel(r'$\textrm{Var}[C_\ell] / \textrm{Avg}[C_\ell]^2$')
         plt.legend()
         plt.tight_layout()
+        plt.show()
+
+    def plot_ridge_plot(self):
+        """
+        Function to plot a ridge-plot of the Cl values
+
+        Returns:
+            None
+        """
+
+        # Read in the data to a Pandas DataFrame
+        data_df = pd.read_csv(self.folder_path + 'AggregateCls1.csv')
+
+        # Normalise each value by 1E7 to get working KDE plots
+        for idx in range(len(data_df.keys())):
+            data_df[data_df.keys()[idx]] = (data_df[data_df.keys()[idx]] * 1E7)
+
+        data_frames = []
+
+        # Go through each ell and extract the Cl data
+        for label, c_ells in data_df.items():
+            # Subject to the condition where ell <= 25
+            if int(label) > 25:
+                continue
+            tmp_df = pd.DataFrame({'ell': label, 'Cl': (c_ells - np.mean(c_ells)) / np.mean(c_ells)})
+            data_frames.append(tmp_df)
+
+        data = pd.concat(data_frames, ignore_index=True)
+
+        # Resets the Seaborn pallet to have a white figure background
+        sns.set_theme(style="white", rc={"axes.facecolor": (0, 0, 0, 0)})
+
+        # Create the colour map for our ell values
+        pal = sns.cubehelix_palette(len(data_frames), rot=-0.2, light=0.75, dark=0.05, gamma=1.25)
+
+        # Initialize the FacetGrid object
+        g = sns.FacetGrid(data, row="ell", hue="ell", aspect=20, height=0.5, palette=pal)
+
+        # Draw the densities in a few steps
+        g.map(sns.kdeplot, "Cl", bw_adjust=0.5, clip_on=False, fill=True, alpha=1, linewidth=1.5)
+        g.map(sns.kdeplot, "Cl", clip_on=False, color="w", lw=2, bw_adjust=0.5)
+        g.map(plt.axhline, y=0, lw=2, clip_on=False)
+        g.map(plt.axvline, x=0, linestyle='--', color='w', lw=1, alpha=0.8, clip_on=False)
+
+        # Define and use a simple function to label the plot in axes coordinates
+        def label_func(x, color, label):
+            ax = plt.gca()
+            ax.text(0, .2, label, fontweight="bold", color=color,
+                    ha="left", va="center", transform=ax.transAxes)
+
+        g.map(label_func, "Cl")
+
+        # Function to plot the expected values for the Γ-distribution which describes the distribution of the Cl's
+        def plot_gamma(x, color, label):
+            # Get the current plot's axis
+            ax = plt.gca()
+
+            # Compute the expected variance from the ell value
+            var = 2 / (2 * int(label) + 1)
+
+            # Sort the x values ascending so our plot is smooth and continuous
+            x = np.sort(x)
+
+            # Plot the Γ-distribution PDF given the variance for the ell value, in blue.
+            ax.plot(x, scistats.gamma.pdf(x, a=1/var, loc=-1, scale=var), lw=3, color='tab:blue')
+
+        # Map the above function to the Cl data
+        g.map(plot_gamma, "Cl")
+
+        # Set the subplots to overlap
+        g.fig.subplots_adjust(hspace=-0.45)
+
+        # Add title to figure and adjust its position
+        g.fig.subplots_adjust(top=0.995)
+        g.fig.suptitle(r'Distribution of the $C_\ell$ values', fontsize=18)
+        plt.xlabel(r'$[C_\ell - \bar{C}_\ell] / \bar{C}_\ell$', fontsize=16)
+        plt.xlim(left=-1, right=1)
+
+        # Remove axes details that don't play well with overlap
+        g.set_titles("")
+        g.set(yticks=[])
+        g.despine(bottom=True, left=True)
         plt.show()
 
     @staticmethod
@@ -553,6 +771,29 @@ class CambObject:
             # Store our Cl list in the class
             self.my_cls.append(cls)
 
+    def plot_map_to_alm_diff(self):
+        maps = hp.read_map(self.folder_path + 'Output-shear-map-fits-f1z1.fits', verbose=False, field=None)
+
+        # Split the shae map into a convergence, shear1, and shear2 maps
+        converg_map = maps[0]
+        shear_map1 = maps[1]
+        shear_map2 = maps[2]
+
+        shear_cl1 = hp.sphtfunc.anafast(shear_map1, lmax=self.ell_max)
+
+        plt.figure(figsize=(12, 7))
+        plt.loglog(self.ells, self.ells * (self.ells + 1) * self.my_cls[0][2:] / (2 * np.pi),
+                   label='My Cls', color='navy', lw=1.75)
+        plt.loglog(self.ells, self.ells * (self.ells + 1) * shear_cl1[2:] / (2 * np.pi),
+                   label=r'Cls from Flask', color='steelblue', lw=0.5, alpha=0.5)
+        plt.title(r'Comparison of $C_\ell$ computation for redshift bin 1')
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
+        plt.legend()
+        plt.xlim(right=1E3)
+        plt.tight_layout()
+        plt.show()
+
     def plot_flask_output(self):
 
         # Obtain the Planck colour-map used for plotting maps here
@@ -561,56 +802,57 @@ class CambObject:
         # Go through each redshift bin individually and make plots for each
         for z_bin in range(1, self.num_redshift_bins + 1):
             # Read in the generated shear map from Flask
-            maps = hp.read_map(self.folder_path + 'Output-shear-map-fits-f1z' + str(z_bin) + '.fits', verbose=False,
-                               field=None)
+            # maps = hp.read_map(self.folder_path + 'Output-shear-map-fits-f1z' + str(z_bin) + '.fits', verbose=False,
+            #                    field=None)
 
             # Split the shae map into a convergence, shear1, and shear2 maps
-            converg_map = maps[0]
-            shear_map1 = maps[1]
-            shear_map2 = maps[2]
+            # converg_map = maps[0]
+            # shear_map1 = maps[1]
+            # shear_map2 = maps[2]
 
             # Plot the convergence and shear1 maps
-            hp.mollview(converg_map, cmap=planck_cmap, title='Convergence for redshift bin ' + str(z_bin))
-            hp.graticule(verbose=False, alpha=0.6)
-            hp.mollview(shear_map1, cmap=planck_cmap, title='Shear for redshift bin ' + str(z_bin))
-            hp.graticule(verbose=False, alpha=0.6)
+            # hp.mollview(converg_map, cmap=planck_cmap, title='Convergence for redshift bin ' + str(z_bin))
+            # hp.graticule(verbose=False, alpha=0.6)
+            # hp.mollview(shear_map1, cmap=planck_cmap, title='Shear for redshift bin ' + str(z_bin))
+            # hp.graticule(verbose=False, alpha=0.6)
 
             # Use HealPy functions to turn the maps into Cl's
             start_time = time.time()
-            converg_cl = hp.sphtfunc.anafast(converg_map, lmax=self.ell_max)
+            # ? converg_cl = hp.sphtfunc.anafast(converg_map, lmax=self.ell_max)
             print('Converg took {sec} seconds'.format(sec=time.time() - start_time))
 
             start_time = time.time()
-            shear_cl1 = hp.sphtfunc.anafast(shear_map1, lmax=self.ell_max)
+            # ? shear_cl1 = hp.sphtfunc.anafast(shear_map1, lmax=self.ell_max)
             print('Shear1 took {sec} seconds'.format(sec=time.time() - start_time))
 
             start_time = time.time()
-            shear_cl2 = hp.sphtfunc.anafast(shear_map2, lmax=self.ell_max)
+            # ? shear_cl2 = hp.sphtfunc.anafast(shear_map2, lmax=self.ell_max)
             print('Shear2 took {sec} seconds'.format(sec=time.time() - start_time))
 
             flask_cl_df = pd.read_csv(
-                    self.folder_path + 'Output-Reg-Cl-f1z' + str(z_bin) + 'f1z' + str(z_bin) + '.dat',
-                    header=None, names=['ell', 'Cl'], sep=r'\s+')
+                    self.folder_path + 'Output-Cl.dat',
+                    header=None, names=['ell', 'Cl-z1z1', 'Cl-z1z2', 'Cl-z2z2'], sep=r'\s+', skiprows=1)
 
             # Plot various Cl's
             plt.figure(figsize=(12, 7))
             # plt.loglog(self.ells, self.ells * (self.ells + 1) * self.my_cls[z_bin - 1][2:] / (2 * np.pi), label='My Cl', color='yellow', lw=2.25)
-            plt.loglog(self.ells, self.ells * (self.ells + 1) * converg_cl[2:] / (2 * np.pi), label=r'$C_\ell$ converg')
-            plt.loglog(self.ells, self.ells * (self.ells + 1) * shear_cl1[2:] / (2 * np.pi), label=r'$C_\ell$ shear 1')
-            plt.loglog(self.ells, self.ells * (self.ells + 1) * shear_cl2[2:] / (2 * np.pi), label=r'$C_\ell$ shear 2')
-            plt.loglog(self.ells, self.ells * (self.ells + 1) * (shear_cl1[2:] + shear_cl2[2:]) / (2 * np.pi),
-                       label=r'$C_\ell$ shear 1 + 2', color='purple', lw=2)
+            # plt.loglog(self.ells, self.ells * (self.ells + 1) * converg_cl[2:] / (2 * np.pi), label=r'$C_\ell$ converg', color='purple')
+            # plt.loglog(self.ells, self.ells * (self.ells + 1) * shear_cl1[2:] / (2 * np.pi), label=r'$C_\ell$ shear 1')
+            # plt.loglog(self.ells, self.ells * (self.ells + 1) * shear_cl2[2:] / (2 * np.pi), label=r'$C_\ell$ shear 2')
+            # plt.loglog(self.ells, self.ells * (self.ells + 1) * (shear_cl1[2:] + shear_cl2[2:]) / (2 * np.pi),
+            #            label=r'$C_\ell$ shear 1 + 2', color='purple', lw=2)
             plt.loglog(self.ells, self.ells * (self.ells + 1) *
                        self.raw_c_ells['W' + str(z_bin) + 'x' + 'W' + str(z_bin)][2:] / (2 * np.pi),
-                       label=r'$C_\ell$ input', lw=1.5, color='cyan')
+                       label=r'$C_\ell$ input', lw=1.5, color='blue')
             plt.loglog(flask_cl_df['ell'],
-                       flask_cl_df['ell'] * (flask_cl_df['ell'] + 1) * flask_cl_df['Cl'] / (2 * np.pi), lw=2,
+                       flask_cl_df['ell'] * (flask_cl_df['ell'] + 1) * flask_cl_df['Cl-z1z1'] / (2 * np.pi), lw=2,
                        color='navy', label='Cl from Flask')
             plt.title(r'$C_\ell$ for redshift bin ' + str(z_bin))
             plt.xlabel(r'$\ell$')
             plt.ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
             plt.legend()
             plt.tight_layout()
+            plt.show()
 
             # Plot various differences in the Cl's
             plt.figure(figsize=(12, 7))

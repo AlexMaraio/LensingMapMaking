@@ -1,13 +1,16 @@
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set(font_scale=1.75, rc={'text.usetex': True})
 
 from lib.RedshiftWindow import RedshiftWindow
 from lib.CambObject import CambObject
+from lib.Visualisations import Viz
 
 import camb
 
 if __name__ == '__main__':
+    # Rough Euclid redshift window bins
     window1 = RedshiftWindow(0.2, 0.05)
     window2 = RedshiftWindow(0.49, 0.05)
     window3 = RedshiftWindow(0.62, 0.05)
@@ -22,30 +25,33 @@ if __name__ == '__main__':
     window1 = RedshiftWindow(0.5, 0.05)
     window2 = RedshiftWindow(2.0, 0.05)
 
+    # * Initiates three models, linear LCDM, non-linear LCDM, and non-linear wCDM
     linear = CambObject('Linear', 5000, non_linear=False)
     non_linear = CambObject('Non-linear', 5000, non_linear=True)
+    non_linear_de = CambObject('Non-linear-DE', 5000, non_linear=True)  # Non-linear model but now changing dark energy
 
-    linear.set_window_functions([window1, window2, window10])
-    # non_linear.set_window_functions([window1, window5, window10])
+    # * Sets the window functions for our three models
+    linear.set_window_functions([window1, window2])
     non_linear.set_window_functions([window1, window2])
+    non_linear_de.set_window_functions([window1, window2])
 
-    c_ells_linear = linear.get_c_ells_dict()
-    c_ells_nonlinear = non_linear.get_c_ells_dict()
+    # Sets the dark energy parameters for our new dark energy model
+    non_linear_de.set_dark_energy(w_0=-0.9, w_a=0.1)
+    non_linear_de.compute_c_ells()
 
-    plt.figure(figsize=(13, 7))
-    plt.loglog(non_linear.ells, c_ells_nonlinear['W1xW1'][2:], color='r', label=r'$1 \times 1$')
-    plt.loglog(non_linear.ells, c_ells_nonlinear['W2xW2'][2:], color='y', label=r'$2 \times 2$')
-    # plt.loglog(non_linear.ells, c_ells_nonlinear['W3xW3'][2:], color='b', label=r'$10 \times 10$')
-    plt.loglog(linear.ells, c_ells_linear['W1xW1'][2:], color='r', ls='--')
-    plt.loglog(linear.ells, c_ells_linear['W2xW2'][2:], color='y', ls='--')
-    # plt.loglog(linear.ells, c_ells_linear['W3xW3'][2:], color='b', ls='--')
-    plt.title('Lensing power spectrum')
-    plt.xlabel(r'$\ell$')
-    plt.ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
-    plt.legend()
-    plt.tight_layout()
-    plt.show(block=False)
+    # Set up a visualisation class
+    viz = Viz()
 
+    # Plot the linear and non-linear lensing power spectra
+    viz.plot_lin_nonlin_pspec(linear, non_linear)
+
+    # Plot the lensing power spectra for a varying dark energy model
+    viz.plot_varying_de(non_linear, non_linear_de)
+
+    # Plot the matter and dark energy density ratios for LCDM and wCDM models
+    viz.plot_omega_matter_de(non_linear, non_linear_de)
+
+    # * Start of Flask running process
     non_linear.output_c_ells()
     non_linear.split_camb_output()
 
@@ -53,17 +59,20 @@ if __name__ == '__main__':
 
     non_linear.create_fields_info()
 
-    non_linear.write_flask_config_file()
+    non_linear.write_flask_config_file(n_side=2048*1)
 
     non_linear.set_flask_executable('~/Documents/PhD/Codes/flask/bin/flask')
 
-    # * non_linear.run_flask()
+    # non_linear.run_flask()
 
-    non_linear.multiple_run_flask(250)
+    non_linear.multiple_run_flask(7500)
 
-    # ! non_linear.estimate_cl_from_alm()
+    non_linear.plot_ridge_plot()
+
+    # !non_linear.estimate_cl_from_alm()
+    # ! non_linear.plot_map_to_alm_diff()
 
     # ! non_linear.trim_flask_alm_output()
     # ! non_linear.use_cpp_thingy()
 
-    # * non_linear.plot_flask_output()
+    # non_linear.plot_flask_output()
