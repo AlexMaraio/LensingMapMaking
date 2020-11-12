@@ -60,6 +60,10 @@ class CambObject:
         self.params.InitPower.set_params(As=2.1E-9, ns=0.96)
         self.params.set_for_lmax(self.ell_max, lens_potential_accuracy=1)
 
+        # Parameters for evaluating the matter power spectra over. TODO: Think about changing redshifts?
+        self.params.set_matter_power(redshifts=[0., 0.5, 2.0], kmax=10.0, silent=True)
+        self.matter_power = camb.get_results(self.params)
+
         # Computing the CMB power spectrum is useful as it allows us to plot the TT power spectrum too
         self.params.Want_CMB = True
 

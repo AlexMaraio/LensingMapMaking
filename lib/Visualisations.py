@@ -120,6 +120,66 @@ class Viz:
             plt.tight_layout()
             plt.show(block=True)
 
+        # Get the matter power spectrum from CAMB
+        k1, z1, pk1 = fiducial.results.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=10000)
+        k2, z2, pk2 = de.results.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=10000)
+
+        # Plot the two sets of matter power spectra at different redshifts
+        plt.figure(figsize=(13, 7))
+        plt.loglog(k1, pk1[0, :], color='g', label=r'$z=0, \, \Lambda\textrm{CDM}$')
+        plt.loglog(k2, pk2[0, :], color='b', label=r'$z=0, \, w\textrm{CDM}$')
+
+        plt.loglog(k1, pk1[1, :], color='g', ls='--', label=r'$z=0.5, \, \Lambda\textrm{CDM}$')
+        plt.loglog(k2, pk2[1, :], color='b', ls='--', label=r'$z=0.5, \, w\textrm{CDM}$')
+
+        plt.loglog(k1, pk1[2, :], color='g', ls='-.', label=r'$z=2, \, \Lambda\textrm{CDM}$')
+        plt.loglog(k2, pk2[2, :], color='b', ls='-.', label=r'$z=2, \, w\textrm{CDM}$')
+
+        plt.xlabel(r'$k \,\, [h \textrm{Mpc}^{-1}]$')
+        plt.ylabel(r'$P(k|z) \,\, [(h^{-1} \textrm{Mpc})^3]$')
+        plt.title('Matter power spectrum')
+
+        plt.legend(ncol=3)
+        plt.tight_layout()
+        plt.show(block=False)
+
+        # Now plot the ratio of the matter power spectra at these redshifts
+        plt.figure(figsize=(13, 7))
+        plt.semilogx(k1, pk2[0, :] / pk1[0, :], color='g', lw=2, label='$z=0$')
+        plt.semilogx(k1, pk2[1, :] / pk1[1, :], color='purple', lw=2, label='$z=0.5$')
+        plt.semilogx(k1, pk2[2, :] / pk1[2, :], color='b', lw=2, label='$z=2$')
+
+        plt.xlabel(r'$k \,\, [h \textrm{Mpc}^{-1}]$')
+        plt.ylabel(r'$P_w(k|z) / P_\Lambda(k|z)$')
+        plt.title(r'Ratio of $w$CDM P(k) to $\Lambda$CDM P(k)')
+
+        plt.legend()
+        plt.tight_layout()
+        plt.show(block=False)
+
+        k1, z1, pk1 = fiducial.results.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=10000,
+                                                                 var1='Weyl', var2='Weyl')
+        k2, z2, pk2 = de.results.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=10000,
+                                                           var1='Weyl', var2='Weyl')
+
+        plt.figure(figsize=(13, 7))
+        plt.loglog(k1, pk1[0, :], color='g', label=r'$z=0, \, \Lambda\textrm{CDM}$')
+        plt.loglog(k2, pk2[0, :], color='b', label=r'$z=0, \, w\textrm{CDM}$')
+
+        plt.loglog(k1, pk1[1, :], color='g', ls='--', label=r'$z=0.5, \, \Lambda\textrm{CDM}$')
+        plt.loglog(k2, pk2[1, :], color='b', ls='--', label=r'$z=0.5, \, w\textrm{CDM}$')
+
+        plt.loglog(k1, pk1[2, :], color='g', ls='-.', label=r'$z=2, \, \Lambda\textrm{CDM}$')
+        plt.loglog(k2, pk2[2, :], color='b', ls='-.', label=r'$z=2, \, w\textrm{CDM}$')
+
+        plt.xlabel(r'$k \,\, [h \textrm{Mpc}^{-1}]$')
+        plt.ylabel(r'$k^2 (\phi + \psi) / 2$')
+        plt.title('Weyl potential')
+
+        plt.legend(ncol=3)
+        plt.tight_layout()
+        plt.show(block=False)
+
     def plot_omega_matter_de(self, fiducial, de):
         """
         Function that plots the density ratios of matter and dark energy as a function of scale factor for two models
