@@ -53,11 +53,12 @@ class Viz:
 
     def plot_varying_de(self, fiducial, de):
         """
-        Function that plots two lensing power spectra: the fiducial LCDM model and the varying dark-energy wCDM model
+        Function that plots two power spectra: the fiducial LCDM model and the varying dark-energy wCDM model.
+        Here, we plot the lensing power spectrum and the matter power spectrum.
 
         Args:
-            fiducial (CAMBObject): Class that contains the fiducial lensing power spectrum
-            de (CAMBObject): Class that contains the varying dark energy power spectrum
+            fiducial (CambObject): Class that contains the fiducial lensing power spectrum
+            de (CambObject): Class that contains the varying dark energy power spectrum
 
         Returns:
             None

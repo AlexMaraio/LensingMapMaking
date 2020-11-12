@@ -47,7 +47,7 @@ class CambObject:
         self.ell_max = lmax
         self.non_linear = non_linear
 
-        # Create a vector which stores the ell values which the power spectrum will be evaulated over
+        # Create a vector which stores the ell values which the power spectrum will be evaluated over
         self.ells = np.arange(2, lmax + 1)
 
         # Create a CAMB parameters object in the class, and set the default cosmology.
@@ -117,9 +117,11 @@ class CambObject:
         """
         Function to set the executable path for the FLASK software
 
-        :param path: The path of the parameter
+        Args:
+            path (str): The path of the parameter
 
-        :return: None
+        Returns:
+             None
         """
 
         # Convert the given path to an absolute path
@@ -144,6 +146,15 @@ class CambObject:
         self.flask_executable = path
 
     def set_window_functions(self, window_functions: list) -> None:
+        """
+        Function that sets the class' window function properties
+
+        Args:
+            window_functions (list): A list of window functions that are specified in the RedshiftWindow.py file
+
+        Returns:
+            None
+        """
         if not isinstance(window_functions, list):
             raise RuntimeError('The argument "window_functions" needs to be a list of window functions')
 
@@ -153,6 +164,12 @@ class CambObject:
         self.params.SourceWindows = [window_func.construct_camb_instance() for window_func in window_functions]
 
     def compute_c_ells(self):
+        """
+        Function that calls CAMB to evaluate the Cl values for the given model
+
+        Returns:
+            None
+        """
         start_time = time.time()
         print('Running CAMB for model: ', self.name)
 
@@ -174,6 +191,18 @@ class CambObject:
             return self.c_ells[key]
 
     def output_c_ells(self):
+        """
+        Function that uses the computed Cl values by CAMB and writes the entire set of Cl values to a file. Here, the
+        columns are ell, then TT etc.
+
+        Returns:
+            None
+        """
+
+        # If the Cl's are not already computed, then compute them now
+        if self.raw_c_ells is None:
+            self.compute_c_ells()
+
         filename = self.camb_output_filename = self.folder_path + 'PowerSpecCambOut.dat'
 
         file = open(filename, "w")
@@ -190,11 +219,26 @@ class CambObject:
         file.close()
 
     def split_camb_output(self):
+        """
+        Function that uses the homogenous Cl file written by "output_c_ells" and calls the external function
+        "split_files" to turn these into individual files that Flask can use
+
+        Returns:
+            None
+        """
         split_files(self.camb_output_filename,
                     self.camb_output_filename.split('.')[0] + '-',
                     self.num_redshift_bins)
 
-    def plot_1x2_map_power_spectrum(self, key, nside=512):
+        Args:
+            key (str): String that corresponds to the key in the Cl dictionary returned by CAMB. e.g. 'TxT', 'W1xW2'.
+            nside (int): N_side parameter used when constructing the maps from the Cl values
+            use_mask (bool): Bool that determines if we want to apply the Planck mask to our map
+
+        Returns:
+            None
+        """
+        # Check if provided key is in the Cl dictionary
         if key not in self.raw_c_ells.keys():
             raise RuntimeError('The selected key "' + str(key) + '" for plotting is not in the computed array of: '
                                + str(self.raw_c_ells.keys()))
@@ -241,6 +285,13 @@ class CambObject:
         plt.show()
 
     def create_fields_info(self):
+        """
+        Function that generates the fields_info.ini files that is used by Flask to determine what type and properties
+        of the fields are being calculated
+
+        Returns:
+            None
+        """
         filename = 'fields_info.ini'
 
         file = open(self.folder_path + '/' + filename, 'w')
@@ -262,7 +313,8 @@ class CambObject:
         Args:
             n_side (int): The N_side parameter that is used to construct the maps in Flask
 
-        Returns: None
+        Returns:
+            None
 
         """
         filename = 'FlaskInput.ini'
@@ -394,7 +446,7 @@ class CambObject:
                             number seed - which allows the same input .ini file to generate multiple different spectra
 
         Returns:
-            None: All data is written to the disk by Flask
+            None, all data is written to the disk by Flask
         """
         # Check that the Flask executable path exists before running it
         if self.flask_executable is None:
@@ -498,7 +550,8 @@ class CambObject:
         """
         Function that plots data that has been calculated for multiple runs of Flask
 
-        Returns: None
+        Returns:
+            None
         """
         # Import the previously saved data
         data_df = pd.read_csv(self.folder_path + 'AggregateCls1.csv')
@@ -795,6 +848,13 @@ class CambObject:
         plt.show()
 
     def plot_flask_output(self):
+        """
+        This function provides utilities to read in data produced by Flask and plot then using HealPy to plot the
+        output maps and power spectra from maps
+
+        Returns:
+            None
+        """
 
         # Obtain the Planck colour-map used for plotting maps here
         planck_cmap = make_planck_colour_map()

@@ -61,7 +61,21 @@ if __name__ == '__main__':
     print("Done.")
 
 
-def split_files(input_file, output_file, num_redshift):
+def split_files(input_file, output_file, infofile, num_redshift, do_galaxies):
+    """
+    Function that reads in the homogenous Cl output from CAMB and turns it into discrete Cl files that Flask can
+    read in and process.
+
+    Args:
+        input_file (str): File path to the file containing the l & Cl values for all of the fields computed by CAMB
+        output_file (str): File path prefix for the individual Cl files
+        infofile (str): File path for the fields_info.ini file for Flask
+        num_redshift (int): The number of redshift bins being computed
+        do_galaxies (bool): Bool value representing if we're also computing galaxy counts as well as lensing
+
+    Returns:
+        None
+    """
     print('Splitting the CAMB files')
 
     camb_output = np.loadtxt(input_file, unpack=True)
