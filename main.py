@@ -22,12 +22,12 @@ if __name__ == '__main__':
     window9 = RedshiftWindow(1.45, 0.05)
     window10 = RedshiftWindow(2.04, 0.15)
 
-    window1 = RedshiftWindow(0.5, 0.05)
-    window2 = RedshiftWindow(2.0, 0.05)
+    window1 = RedshiftWindow(0.5, 0.05, enable_counts=False)
+    window2 = RedshiftWindow(2.0, 0.05, enable_counts=False)
 
     # * Initiates three models, linear LCDM, non-linear LCDM, and non-linear wCDM
     linear = CambObject('Linear', 5000, non_linear=False)
-    non_linear = CambObject('Non-linear', 5000, non_linear=True)
+    non_linear = CambObject('Non-linear', 2000, non_linear=True)
     non_linear_de = CambObject('Non-linear-DE', 5000, non_linear=True)  # Non-linear model but now changing dark energy
 
     # * Sets the window functions for our three models
@@ -35,38 +35,51 @@ if __name__ == '__main__':
     non_linear.set_window_functions([window1, window2])
     non_linear_de.set_window_functions([window1, window2])
 
-    # Sets the dark energy parameters for our new dark energy model
-    non_linear_de.set_dark_energy(w_0=-0.9, w_a=0.1)
-    non_linear_de.compute_c_ells()
+    non_linear.compute_c_ells()
+    non_linear.plot_1x2_map_power_spectrum(key='TxT', nside=2048, use_mask=True)
+    non_linear.plot_1x2_map_power_spectrum(key='W2xW2', nside=2048, use_mask=True)
 
-    # Set up a visualisation class
-    viz = Viz()
+    # * Determines if we want to plot the dark energy models against each other
+    plot_dark_energy = True
 
-    # Plot the linear and non-linear lensing power spectra
-    viz.plot_lin_nonlin_pspec(linear, non_linear)
+    if plot_dark_energy:
+        # Sets the dark energy parameters for our new dark energy model
+        non_linear_de.set_dark_energy(w_0=-0.9, w_a=0.1)
+        non_linear_de.compute_c_ells()
 
-    # Plot the lensing power spectra for a varying dark energy model
-    viz.plot_varying_de(non_linear, non_linear_de)
+        # Set up a visualisation class
+        viz = Viz()
 
-    # Plot the matter and dark energy density ratios for LCDM and wCDM models
-    viz.plot_omega_matter_de(non_linear, non_linear_de)
+        # Plot the linear and non-linear lensing power spectra
+        viz.plot_lin_nonlin_pspec(linear, non_linear)
+
+        # Plot the lensing power spectra for a varying dark energy model
+        viz.plot_varying_de(non_linear, non_linear_de)
+
+        # Plot the matter and dark energy density ratios for LCDM and wCDM models
+        viz.plot_omega_matter_de(non_linear, non_linear_de)
+
+        viz.plot_exp_gal_dens()
 
     # * Start of Flask running process
+    non_linear.create_fields_info()
+    non_linear.write_exp_gal_dist(mean_dens=45)
+
     non_linear.output_c_ells()
     non_linear.split_camb_output()
 
     # non_linear.plot_1x2_map_power_spectrum(key='W1xW1', nside=2048)
 
-    non_linear.create_fields_info()
-
     non_linear.write_flask_config_file(n_side=2048*1)
 
     non_linear.set_flask_executable('~/Documents/PhD/Codes/flask/bin/flask')
 
-    # non_linear.run_flask()
+    non_linear.run_flask()
+    non_linear.plot_flask_output()
 
-    non_linear.multiple_run_flask(7500)
+    # non_linear.multiple_run_flask(3000)
 
+    non_linear.plot_multiple_run_data()
     non_linear.plot_ridge_plot()
 
     # !non_linear.estimate_cl_from_alm()

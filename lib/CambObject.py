@@ -248,7 +248,13 @@ class CambObject:
         """
         split_files(self.camb_output_filename,
                     self.camb_output_filename.split('.')[0] + '-',
-                    self.num_redshift_bins)
+                    self.folder_path + 'fields_info.ini',
+                    self.num_redshift_bins,
+                    self.galaxy_dens)
+
+    def plot_1x2_map_power_spectrum(self, key, nside=2048, use_mask=False):
+        """
+        Function that plots the map and power spectrum of the Cl values that are given by the "key" parameter
 
         Args:
             key (str): String that corresponds to the key in the Cl dictionary returned by CAMB. e.g. 'TxT', 'W1xW2'.
@@ -271,17 +277,49 @@ class CambObject:
 
         # Use Healpy to plot the Cl's as a map
         map1 = hp.sphtfunc.synfast(cl, nside=nside, new=True, verbose=False)
+
+        # If we're using a mask, then perform mask related actions
+        if use_mask:
+            # Read in the Planck mask. Note that nside must be 2048 to work with this mask
+
+            if nside != 2048:
+                raise RuntimeError('The default Planck mask has a N_side of 2048, and so the provided N_side must be '
+                                   'equal to this for this to work.')
+
+            # Read in the mask as a set of bool values
+            mask = hp.read_map('./resources/existing_maps/Planck_COM_Mask_CMB-common-Mask-Int_2048_R3.00.fits').astype(
+                np.bool)
+
+            # Compute the masked fraction, here 1 indicates no mask and 0 would be fully masked
+            mask_fraction = mask.sum() / len(mask)
+            print('The fraction of the mask that is allowed through is {mask_val:.3f}'.format(mask_val=mask_fraction))
+
+            # Convert the original map into a masked map
+            masked_map = hp.ma(map1)
+            masked_map.mask = np.logical_not(mask)
+
         hp.visufunc.mollview(map1, cmap=planck_cmap, title='Map of power spectrum for ' + str(key))
-        hp.graticule(verbose=False, alpha=0.6)
+        hp.graticule(verbose=False, alpha=0.8)
+
+        # If using a mask, then plot the masked map too
+        if use_mask:
+            hp.visufunc.mollview(masked_map, cmap=planck_cmap,
+                                 title='Map of power spectrum for ' + str(key) + 'with mask')
+            hp.graticule(verbose=False, alpha=0.8)
+
         plt.show()
 
         # Now convert our map to Cl's for comparison with the original Cl's
-        cl_from_map = hp.sphtfunc.anafast(map1, lmax=self.ell_max)
+        cl_from_map = hp.sphtfunc.anafast(map1, lmax=self.ell_max)[2:self.ell_max - 2]
+        if use_mask:
+            cl_with_mask = hp.sphtfunc.anafast(masked_map, lmax=self.ell_max)[2:self.ell_max - 2]
+        ells = np.arange(2, self.ell_max - 2)
 
         # Now, we plot both sets of Cl's
         plt.figure(figsize=(13, 7))
-        plt.loglog(np.arange(2, self.ell_max + 1), cl, label=r'$C_\ell$ input', lw=2.5)
-        plt.loglog(np.arange(2, self.ell_max + 1), cl_from_map[2:self.ell_max + 1], label=r'$C_\ell$ from map')
+        plt.loglog(ells, cl[:-3], label=r'$C_\ell$ input', lw=2.5)
+        if use_mask:
+            plt.loglog(ells, cl_from_map, label=r'$C_\ell$ from map')
         plt.title(r'Comparison of $C_{\ell}$')
         plt.xlabel(r'$\ell$')
         plt.ylabel(r'$C_{\ell}$')
@@ -289,14 +327,15 @@ class CambObject:
         plt.tight_layout()
         plt.show()
 
-        ells = np.arange(2, self.ell_max + 1)
-
         # Plot both of the Cl's, but now with the scaling of ell(ell + 1)/2pi in place
         plt.figure(figsize=(13, 7))
-        plt.loglog(np.arange(2, self.ell_max + 1), cl * ells * (ells + 1) / (2 * np.pi), label=r'$C_\ell$ input',
-                   lw=2.5)
-        plt.loglog(np.arange(2, self.ell_max + 1), cl_from_map[2:self.ell_max + 1] * ells * (ells + 1) / (2 * np.pi),
-                   label=r'$C_\ell$ from map')
+        plt.loglog(ells, cl[:-3] * ells * (ells + 1) / (2 * np.pi), label=r'$C_\ell$ input', lw=2.5, color='navy')
+        plt.loglog(ells, cl_from_map * ells * (ells + 1) / (2 * np.pi), label=r'$C_\ell$ from map', color='tab:blue')
+        if use_mask:
+            plt.loglog(ells, cl_with_mask * ells * (ells + 1) / (2 * np.pi), label=r'$C_\ell$ from map with mask',
+                       color='hotpink')
+            plt.loglog(ells, cl_with_mask * ells * (ells + 1) / (2 * np.pi) / mask_fraction,
+                       label=r'``Corrected" $C_\ell$ from map with mask', color='tab:orange')
         plt.title(r'Comparison of $C_{\ell}$')
         plt.xlabel(r'$\ell$')
         plt.ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
@@ -596,13 +635,11 @@ class CambObject:
             None
         """
 
-        # List for the list of Cl's for each run to be appended into
-        cls = []
-
         # Time how long the total runs took
         start_time = time.time()
 
-        # Dataframe that we will store the data into after each run
+        # Lists that we will store the data-frames into after each run, one for the raw Cl values and normalised values
+        raw_data_dfs = []
         data_dfs = []
 
         # Run Flask the given number of times to generate a power spectra each time
@@ -613,15 +650,14 @@ class CambObject:
             cl_df = pd.read_csv(self.folder_path + 'Output-Cl.dat', header=None,
                                 names=['ell', 'Cl-f1z1f1z1', 'Cl-f1z1f1z2', 'Cl-f1z2f1z2'], sep=r'\s+', skiprows=1)
 
-            # Extract the Cl's and append them to the existing list.
-            # Note: we normalise through ell (ell + 1) / 2 pi now.
-            cls.append(cl_df['Cl-f1z2f1z2'] * self.ells * (self.ells + 1) / (2 * np.pi))
-
             # Strip any spaces out of the column names
             cl_df.columns = cl_df.columns.str.lstrip()
 
             # Get the ell values as a numpy array
             ells = cl_df['ell'].to_numpy()
+
+            # Create a new data-frame that stores the raw Cl values (i.e. without ell(ell+1) normalisation)
+            raw_cl_df = pd.DataFrame({'Cl': cl_df['Cl-f1z2f1z2'].to_numpy()}, index=ells)
 
             # Get the c_ell values normalised by ell(ell+1)/2pi, as usual
             c_ells = cl_df['Cl-f1z2f1z2'].to_numpy() * self.ells * (self.ells + 1) / (2 * np.pi)
@@ -629,18 +665,21 @@ class CambObject:
             # Create a new dummy dataframe with out C_ell values, with an index determined by the ell values
             cl_df = pd.DataFrame({'Cl': c_ells}, index=ells)
 
-            # Append the transpose of the current data frame to the list
+            # Append the transpose of the current data-frames to the lists
+            raw_data_dfs.append(raw_cl_df.transpose())
             data_dfs.append(cl_df.transpose())
 
-        # Concatenate the all the data frames together into a single output data frame
+        # Concatenate the all the data frames together into a single output data frame, for both data-sets
+        raw_data_df = pd.concat(raw_data_dfs, ignore_index=True)
         data_df = pd.concat(data_dfs, ignore_index=True)
 
         # Prints timing statistics
         print('The total time for the runs was {num:.3f} seconds, with an average of {numpersec:.3f} seconds/run'
-              .format(num=time.time() - start_time, numpersec=(time.time() - start_time)/num_runs))
+              .format(num=time.time() - start_time, numpersec=(time.time() - start_time) / num_runs))
 
         # Save the data which can then be read in later
-        data_df.to_csv(self.folder_path + 'AggregateCls1.csv', index=False)
+        raw_data_df.to_csv(self.folder_path + 'AggregateRawCls.csv', index=False)
+        data_df.to_csv(self.folder_path + 'AggregateCls.csv', index=False)
 
         # Hand off to the plotting function which plots the output data
         self.plot_multiple_run_data()
@@ -653,20 +692,25 @@ class CambObject:
             None
         """
         # Import the previously saved data
-        data_df = pd.read_csv(self.folder_path + 'AggregateCls1.csv')
-        data_df_kde = pd.read_csv(self.folder_path + 'AggregateCls1.csv')
+        data_df = pd.read_csv(self.folder_path + 'AggregateRawCls.csv')
+        data_df_kde = pd.read_csv(self.folder_path + 'AggregateCls4.csv')
 
         print('Total number of samples here is: ' + str(len(data_df)))
 
         # Lists where computed data will be stored into
         mean_cls = []
         var_cls = []
+
+        # Skew and kurtosis computed explicitly from the raw data
         skew_cls = []
         kurt_cls = []
 
+        # Skew and kurtosis where we numerically evaluate the moments, but divide by the expected variance
+        skew_cls2 = []
+        kurt_cls2 = []
+
         # Here, we want to find what the average and variance of the Cl's are at each ell
         for label, c_ells in data_df.items():
-
             # Calculate the mean and append it to our list
             mean_val = np.mean(c_ells)
             mean_cls.append(np.mean(c_ells))
@@ -675,18 +719,105 @@ class CambObject:
             var_cls.append(np.var(c_ells) / (mean_val * mean_val))
 
             # Also calculate the skew and kurtosis and append them to the lists too
-            skew_cls.append(scistats.skew(np.array(c_ells), bias=False))
-            kurt_cls.append(scistats.kurtosis(np.array(c_ells), bias=False))
+            skew_cls.append(scistats.skew(np.array(c_ells), bias=True))
+            kurt_cls.append(scistats.kurtosis(np.array(c_ells), bias=True))
+
+            ell = int(label)
+            exp_var = 2 / (2 * ell + 1)
+            exp_var *= self.raw_c_ells['W2xW2'][ell] ** 2
+
+            skew_cls2.append(scistats.moment(np.array(c_ells), moment=3) / (exp_var ** (3 / 2)))
+            kurt_cls2.append((scistats.moment(np.array(c_ells), moment=4) / (exp_var ** 2)) - 3)
 
         # Get the keys of the data frame
         keys = data_df.keys()
 
-        # Plot the raw data on a gird with scatter and histograms
-        grid1 = sns.PairGrid(data_df, vars=[keys[0], keys[2], keys[23], keys[98], keys[498], keys[1498]])
-        grid1.map_diag(sns.histplot)
-        grid1.map_lower(sns.histplot)
-        grid1.map_upper(sns.scatterplot)
-        plt.show(block=False)
+        # Dictionary which the Pearson data will be stored into
+        pearson_data = {'x': [], 'y': [], 'r': []}
+
+        covariance_data = {'x': [], 'y': [], 'raw_C': [], 'norm_C': []}
+
+        # Go through each Cl combination and work out the Pearson correlation coefficient
+        for ell1, c_ells1 in data_df.items():
+            # Only go up to ell1 of 125, otherwise figure too crowded
+            if int(ell1) > 126:
+                continue
+
+            # Only want to compute samples where ell2 < ell1
+            for ell2, c_ells2 in data_df.items():
+                if int(ell2) >= int(ell1):
+                    continue
+
+                # Use the Pearson test to get correlation coefficient
+                r_val, p_val = scistats.pearsonr(c_ells1, c_ells2)
+
+                # Store the calculation results in the Pearson data dictionary
+                pearson_data['x'].append(int(ell1))
+                pearson_data['y'].append(int(ell2))
+                pearson_data['r'].append(r_val)
+
+                # * Now manually compute the covariance matrix
+
+                val = 0
+                # Go through each ell1 and ell2 list and compute the sum at that point
+                for val1, val2 in zip(c_ells1.to_numpy(), c_ells2.to_numpy()):
+                    val += (val1 - self.raw_c_ells['W2xW2'][int(ell1)]) * \
+                           (val2 - self.raw_c_ells['W2xW2'][int(ell2)])
+
+                # Normalise the sum to the number of data points
+                val /= len(c_ells1)
+
+                # Store the data in the covariance data dictionary
+                covariance_data['x'].append(int(ell1))
+                covariance_data['y'].append(int(ell2))
+                covariance_data['raw_C'].append(val)
+
+                # Now normalise through the intrinsic standard deviation at each ell value
+                val /= self.raw_c_ells['W2xW2'][int(ell1)] * np.sqrt(2 / (2 * int(ell1) + 1))
+                val /= self.raw_c_ells['W2xW2'][int(ell2)] * np.sqrt(2 / (2 * int(ell2) + 1))
+
+                # Store that in the dictionary too
+                covariance_data['norm_C'].append(val)
+
+        # Convert the covariance dictionary to a dataframe
+        covariance_df = pd.DataFrame(covariance_data)
+
+        # Pivot the dataframe to get in correct form for plotting a heatmap
+        raw_covariance_df = covariance_df.pivot('x', 'y', 'raw_C')
+        norm_covariance_df = covariance_df.pivot('x', 'y', 'norm_C')
+
+        # Turn our dictionary into a data-frame
+        pearson_df = pd.DataFrame(pearson_data)
+
+        # Pivot the data-frame to get it in the right format for plotting
+        pearson_df = pearson_df.pivot('x', 'y', 'r')
+
+        # Use a heatmap to plot the correlation coefficients
+        with sns.axes_style("white"):
+            plt.figure(figsize=(9, 8))
+            ax = sns.heatmap(data=pearson_df, square=True, cmap="jet",
+                             cbar_kws={'label': 'Pearson $r$ correlation coefficient'})
+            ax.set_xlabel(r'$\ell_1$')
+            ax.set_ylabel(r'$\ell_2$')
+            plt.tight_layout()
+
+            plt.figure(figsize=(9, 8))
+            ax = sns.heatmap(data=raw_covariance_df, square=True, cmap="jet",
+                             cbar_kws={'label': 'Covariance matrix $C_{ij}$'})
+            ax.set_xlabel(r'$\ell_i$')
+            ax.set_ylabel(r'$\ell_j$')
+            ax.set_title('Raw covariance matrix')
+            plt.tight_layout()
+
+            plt.figure(figsize=(9, 8))
+            ax = sns.heatmap(data=norm_covariance_df, square=True, cmap="jet",
+                             cbar_kws={'label': r'Covariance matrix $C_{ij} / \sigma_i \sigma_j$'})
+            ax.set_xlabel(r'$\ell_i$')
+            ax.set_ylabel(r'$\ell_j$')
+            ax.set_title('Normalised covariance matrix')
+            plt.tight_layout()
+
+            plt.show()
 
         # In order to plot a KDE, we need to increase the size of the values in order to make them order-unity
         for idx in range(len(keys)):
@@ -699,21 +830,35 @@ class CambObject:
         grid2.tight_layout()
         plt.show(block=False)
 
-        # Print the raw data for each Cl dataset - very messy but gets the point across
+        # * Print the raw data for each Cl dataset - very messy but gets the point across
         plt.figure(figsize=(13, 7))
         for cl in data_df.itertuples(index=False):
             plt.loglog(self.ells, cl, alpha=0.5, linewidth=0.75)
+
+        plt.loglog(self.ells, mean_cls, lw=2, color='blue', label=r'Average $C_\ell$')
+
         plt.xlabel(r'$\ell$')
         plt.ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
-        plt.loglog(self.ells, mean_cls, lw=2, color='blue', label=r'Average $C_\ell$')
+
         plt.legend()
+        plt.tight_layout()
+
+        # * Plot the deviation of the mean_cls vs input cls from CAMB
+        plt.figure(figsize=(13, 7))
+        plt.semilogx(self.ells, (np.array(mean_cls) / self.raw_c_ells['W2xW2'][2:]) - 1, lw=2, color='purple')
+
+        plt.title(r'Deviation of the average $C_\ell$ with respect to the input $C_\ell$ values')
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$ (C_\ell^\textrm{Avg} - C_\ell^\textrm{In} ) / C_\ell^\textrm{In} $')
+
         plt.tight_layout()
 
         # Also plot the skew
         plt.figure(figsize=(13, 7))
 
         # Plot the skew
-        plt.semilogx(self.ells, skew_cls, lw=1, color='b', label='Data')
+        plt.semilogx(self.ells, skew_cls, lw=1, color='b', label='Fully numerical')
+        plt.semilogx(self.ells, skew_cls2, lw=1, color='k', label='With theory variance')
 
         # Plot the expected skew for a Gamma distribution
         k = (2 * self.ells + 1) / 2
@@ -726,7 +871,8 @@ class CambObject:
 
         # And kurtosis
         plt.figure(figsize=(13, 7))
-        plt.semilogx(self.ells, kurt_cls, lw=1, color='b', label='Data')
+        plt.semilogx(self.ells, kurt_cls, lw=1, color='b', label='Fully numerical')
+        plt.semilogx(self.ells, kurt_cls2, lw=1, color='k', label='With theory variance')
         plt.semilogx(self.ells, 6 / k, color='purple', lw=2, label=r'$\Gamma$ function prediction')
         plt.title('Kurtosis')
         plt.xlabel(r'$\ell$')
@@ -742,6 +888,32 @@ class CambObject:
         plt.legend()
         plt.tight_layout()
         plt.show()
+
+        # * Code that computes the ks-test to see if our Cl distributions *are* statistically Gaussian or Gamma-func
+
+        for ell, c_ells in data_df.items():
+            stdev = self.raw_c_ells['W2xW2'][int(ell)] * np.sqrt(2 / (2 * int(ell) + 1))
+            k_stat, p_val = scistats.kstest(c_ells, 'norm', args=[self.raw_c_ells['W2xW2'][int(ell)], stdev])
+            print(k_stat, p_val)
+
+            k_stat, p_val = scistats.kstest(c_ells, 'gamma', args=[(2 * int(ell) + 1) / 2,
+                                                                   self.raw_c_ells['W2xW2'][int(ell)] *
+                                                                   2 / (2 * int(ell) + 1)])
+            print(k_stat, p_val)
+
+            plt.figure(figsize=(13, 7))
+            plt.hist(c_ells, bins=50)
+
+            norm_vals = np.random.normal(loc=self.raw_c_ells['W2xW2'][int(ell)], scale=stdev, size=len(c_ells))
+            plt.hist(norm_vals[norm_vals > 0], bins=50, alpha=0.5)
+
+            gamma_vals = np.random.gamma(shape=(2 * int(ell) + 1) / 2,
+                                         scale=self.raw_c_ells['W2xW2'][int(ell)] * 2 / (2 * int(ell) + 1),
+                                         size=len(c_ells))
+            plt.hist(gamma_vals, bins=50, alpha=0.5)
+
+            plt.title('l = ' + str(ell))
+            plt.show()
 
     def plot_ridge_plot(self):
         """
@@ -805,7 +977,9 @@ class CambObject:
             x = np.sort(x)
 
             # Plot the Γ-distribution PDF given the variance for the ell value, in blue.
-            ax.plot(x, scistats.gamma.pdf(x, a=1/var, loc=-1, scale=var), lw=3, color='tab:blue')
+            ax.plot(x, scistats.gamma.pdf(x, a=1 / var, loc=-1, scale=var), lw=3, color='tab:blue')
+
+            ax.plot(x, scistats.norm.pdf(x, loc=0, scale=np.sqrt(var)), lw=2, color='tab:green')
 
         # Map the above function to the Cl data
         g.map(plot_gamma, "Cl")
@@ -1129,3 +1303,29 @@ class CambObject:
 
         # See how long it took
         print('My cpp map to alm calculation took {num:.2f} seconds'.format(num=time.time() - start_time))
+
+    def experimenting_with_masks(self):
+        """
+        Here, we are playing around with masks and seeing what effects they have on the data!
+        Not a real science function
+
+        Returns:
+            None
+        """
+
+        wmap_data = hp.read_map('./resources/existing_maps/wmap_band_iqumap_r9_7yr_Q_v4.fits')
+        wmap_mask = hp.read_map('./resources/existing_maps/wmap_temperature_analysis_mask_r9_7yr_v4.fits').astype(np.bool)
+
+        wmap_masked = hp.ma(wmap_data) * 1E3
+        wmap_masked.mask = np.logical_not(wmap_mask)
+
+        planck_cmap = make_planck_colour_map()
+        hp.mollview(wmap_data, cmap='inferno', norm="hist", min=-1, max=1, title='WMAP data with no mask (hist. equal cmap)')
+        hp.graticule(verbose=False, alpha=0.8)
+
+        hp.mollview(wmap_mask, cmap='magma', title='WMAP mask')
+        hp.graticule(verbose=False, alpha=0.8)
+
+        hp.mollview(wmap_masked.filled(), cmap='viridis', title='WMAP data with mask', unit='$\mu$K')
+        hp.graticule(verbose=False, alpha=0.8)
+        plt.show()
