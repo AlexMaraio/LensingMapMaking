@@ -10,6 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from .CambObject import CambObject
+
 
 class Viz:
 
@@ -34,15 +36,21 @@ class Viz:
         if not non_linear.non_linear:
             warnings.warn('Expected the non-linear input object to have a non-linear power spectrum!')
 
+        if not linear.galaxy_dens == non_linear.galaxy_dens:
+            raise RuntimeError('Both input CambObjects must either have galaxy counts, or neither have')
+
+        z1 = 'W2xW2' if linear.galaxy_dens else 'W1xW1'
+        z2 = 'W4xW4' if linear.galaxy_dens else 'W2xW2'
+
         plt.figure(figsize=(13, 7))
 
-        plt.loglog(non_linear.ells, non_linear.get_c_ells_dict()['W1xW1'][2:], color='g', ls='-',
+        plt.loglog(non_linear.ells, non_linear.get_c_ells_dict()[z1][2:], color='g', ls='-',
                    label=r'$z_1 = 0.5$')
-        plt.loglog(non_linear.ells, non_linear.get_c_ells_dict()['W2xW2'][2:], color='b', ls='-',
+        plt.loglog(non_linear.ells, non_linear.get_c_ells_dict()[z2][2:], color='b', ls='-',
                    label=r'$z_2 = 2$')
 
-        plt.loglog(linear.ells, linear.get_c_ells_dict()['W1xW1'][2:], color='g', ls='--')
-        plt.loglog(linear.ells, linear.get_c_ells_dict()['W2xW2'][2:], color='b', ls='--')
+        plt.loglog(linear.ells, linear.get_c_ells_dict()[z1][2:], color='g', ls='--')
+        plt.loglog(linear.ells, linear.get_c_ells_dict()[z2][2:], color='b', ls='--')
 
         plt.title('Lensing power spectrum')
         plt.xlabel(r'$\ell$')
@@ -64,16 +72,22 @@ class Viz:
             None
         """
 
+        if not fiducial.galaxy_dens == de.galaxy_dens:
+            raise RuntimeError('Both input CambObjects must either have galaxy counts, or neither have')
+
+        z1 = 'W2xW2' if fiducial.galaxy_dens else 'W1xW1'
+        z2 = 'W4xW4' if fiducial.galaxy_dens else 'W2xW2'
+
         plt.figure(figsize=(13, 7))
 
         # First, plot the LCDM model
-        plt.loglog(fiducial.ells, fiducial.get_c_ells_dict()['W1xW1'][2:], color='g', ls='-', label=r'$z_1;\, w=-1$')
-        plt.loglog(fiducial.ells, fiducial.get_c_ells_dict()['W2xW2'][2:], color='b', ls='-', label=r'$z_2;\, w=-1$')
+        plt.loglog(fiducial.ells, fiducial.get_c_ells_dict()[z1][2:], color='g', ls='-', label=r'$z_1;\, w=-1$')
+        plt.loglog(fiducial.ells, fiducial.get_c_ells_dict()[z2][2:], color='b', ls='-', label=r'$z_2;\, w=-1$')
 
         # Now plot our varying dark energy model
-        plt.loglog(de.ells, de.get_c_ells_dict()['W1xW1'][2:], color='g', ls='--',
+        plt.loglog(de.ells, de.get_c_ells_dict()[z1][2:], color='g', ls='--',
                    label=r'$z_1;\, w_0 = ' + str(de.w0) + ', w_a = ' + str(de.wa) + '$')
-        plt.loglog(de.ells, de.get_c_ells_dict()['W2xW2'][2:], color='b', ls='--',
+        plt.loglog(de.ells, de.get_c_ells_dict()[z2][2:], color='b', ls='--',
                    label=r'$z_2;\, w_0 = ' + str(de.w0) + ', w_a = ' + str(de.wa) + '$')
 
         # Give title and axis labels
@@ -83,6 +97,28 @@ class Viz:
         plt.legend(ncol=2)
         plt.tight_layout()
         plt.show(block=True)
+
+        # Now, if we're doing galaxy counts, plot the comparison between the two models
+        if fiducial.galaxy_dens:
+            plt.figure(figsize=(13, 7))
+
+            # First, plot the LCDM model
+            plt.loglog(fiducial.ells, fiducial.get_c_ells_dict()['W1xW1'][2:], color='g', ls='-', label=r'$z_1;\, w=-1$')
+            plt.loglog(fiducial.ells, fiducial.get_c_ells_dict()['W3xW3'][2:], color='b', ls='-', label=r'$z_2;\, w=-1$')
+
+            # Now plot our varying dark energy model
+            plt.loglog(de.ells, de.get_c_ells_dict()['W1xW1'][2:], color='g', ls='--',
+                       label=r'$z_1;\, w_0 = ' + str(de.w0) + ', w_a = ' + str(de.wa) + '$')
+            plt.loglog(de.ells, de.get_c_ells_dict()['W3xW3'][2:], color='b', ls='--',
+                       label=r'$z_2;\, w_0 = ' + str(de.w0) + ', w_a = ' + str(de.wa) + '$')
+
+            # Give title and axis labels
+            plt.title('Galaxy counts power spectrum')
+            plt.xlabel(r'$\ell$')
+            plt.ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
+            plt.legend(ncol=2)
+            plt.tight_layout()
+            plt.show(block=True)
 
     def plot_omega_matter_de(self, fiducial, de):
         """
@@ -123,5 +159,28 @@ class Viz:
         # Add legends and show the plot
         ax1.legend()
         ax2.legend()
+        plt.tight_layout()
+        plt.show()
+
+    def plot_exp_gal_dens(self):
+        """
+        Function that plots the expected galaxy density as a function of redshift
+
+        Returns:
+            None
+        """
+
+        z_range = np.linspace(0, 2.5, 250)
+
+        plt.figure(figsize=(13, 7))
+
+        plt.plot(z_range, CambObject.exp_gal_dens(z_range), lw=3, label=r'$\bar{n}_g = 30; z_m=0.9$')
+        plt.plot(z_range, CambObject.exp_gal_dens(z_range, mean_dens=40), lw=3, label=r'$\bar{n}_g = 40; z_m=0.9$')
+        plt.plot(z_range, CambObject.exp_gal_dens(z_range, z_m=1.2), lw=3, label=r'$\bar{n}_g = 30; z_m=1.2$')
+
+        plt.xlabel('$z$')
+        plt.ylabel('Expected surface galaxy density (gal / arcmin$^2$)')
+
+        plt.legend()
         plt.tight_layout()
         plt.show()

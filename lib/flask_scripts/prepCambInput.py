@@ -78,18 +78,35 @@ def split_files(input_file, output_file, infofile, num_redshift, do_galaxies):
     """
     print('Splitting the CAMB files')
 
+    # Read the CAMB and info files into memory
     camb_output = np.loadtxt(input_file, unpack=True)
+    info_file = np.loadtxt(infofile)
 
+    # Obtain the number of fields from the info file
+    num_fields = info_file.shape[0]
+
+    # If we're doing galaxies then the number of fields is twice the number of redshift bins - else it is simply the
+    # number of redshift bins. Check this here
+    assert num_fields == 2 * num_redshift if do_galaxies else num_redshift, \
+        "The number of entries in the fields_info.ini file does not match the provided inputs"
+
+    # Obtain the list of ell values
     ells = camb_output[0]
 
     # Loop over redshift x redshift bins:
-    for z1 in range(1, num_redshift + 1):
-        for z2 in range(z1, num_redshift + 1):
+    for idx1 in range(1, num_fields + 1):
+        for idx2 in range(idx1, num_fields + 1):
+            f1 = int(info_file[idx1 - 1][0])
+            z1 = int(info_file[idx1 - 1][1])
+
+            f2 = int(info_file[idx2 - 1][0])
+            z2 = int(info_file[idx2 - 1][1])
+
             # Obtain list of ells and c_ell values
-            ell_c_l = np.transpose([ells, camb_output[cov_position(z1, z2, num_redshift)]])
+            ell_c_l = np.transpose([ells, camb_output[cov_position(idx1, idx2, num_fields)]])
 
             # Export:
-            output_filename = output_file + 'f1' + 'z' + str(z1) + 'f1' + 'z' + str(z2) + '.dat'
+            output_filename = output_file + 'f' + str(f1) + 'z' + str(z1) + 'f' + str(f2) + 'z' + str(z2) + '.dat'
 
             print("Writing file " + output_filename)
             np.savetxt(output_filename, ell_c_l, fmt=['%d', '%e'])

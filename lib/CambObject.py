@@ -50,6 +50,9 @@ class CambObject:
         # Create a vector which stores the ell values which the power spectrum will be evaluated over
         self.ells = np.arange(2, lmax + 1)
 
+        # Are we computing galaxy number counts as well as a lensing power spectra?
+        self.galaxy_dens = False
+
         # Create a CAMB parameters object in the class, and set the default cosmology.
         # TODO: consider changing the cosmology?
         self.params = camb.CAMBparams()
@@ -161,7 +164,18 @@ class CambObject:
         self.window_functions = window_functions
         self.num_redshift_bins = len(window_functions)
 
-        self.params.SourceWindows = [window_func.construct_camb_instance() for window_func in window_functions]
+        # Since we could have more than one window function type per given window function (as we can have both lensing
+        # and galaxy counts), we need to manually construct a source window list and then set the class' params to this
+        source_windows = []
+        for window_func in window_functions:
+            source_windows += window_func.construct_camb_instance()
+
+            # If our source functions include galaxy counts, then store this in the class
+            if window_func.gal_counts:
+                self.galaxy_dens = True
+
+        # Set the CAMB source windows parameters to the provided source windows
+        self.params.SourceWindows = source_windows
 
     def compute_c_ells(self):
         """
@@ -174,6 +188,8 @@ class CambObject:
         print('Running CAMB for model: ', self.name)
 
         self.results = camb.get_results(self.params)
+
+        # Get both the normalised Cl values *and* raw Cl values. Store both separately
         self.c_ells = self.results.get_source_cls_dict(lmax=self.ell_max)
         self.raw_c_ells = self.results.get_cmb_unlensed_scalar_array_dict(lmax=self.ell_max, raw_cl=True,
                                                                           CMB_unit='muK')
@@ -299,11 +315,79 @@ class CambObject:
         file.write('# File auto-generated which contains information about the redshift distributions\n\n')
         file.write('# Field number, z bin number, mean, shift, field type (1:galaxy, 2:shear), zmin, zmax\n\n')
 
+        # Go through each provided window function
         for index, window in enumerate(self.window_functions, start=1):
-            file.write('\t1 \t ' + str(index) + '\t0.0000\t' + '{:.4f}'.format(XavierShift(window.redshift))
-                       + '\t2\t' + '{:.4f}'.format(window.redshift - window.sigma)
-                       + '\t' + '{:.4f}'.format(window.redshift + window.sigma) + '\n')
 
+            # If we have galaxy counts, then we have two fields associated with this window function: 1. the galaxy
+            # counts field, and 2. the convergence field.
+            if window.gal_counts:
+                file.write('\t1 \t ' + str(index) + '\t0.0000\t' + '{:.4f}'.format(XavierShift(window.redshift))
+                           + '\t1\t' + '{:.4f}'.format(window.redshift - window.sigma)
+                           + '\t' + '{:.4f}'.format(window.redshift + window.sigma) + '\n')
+
+                file.write('\t2 \t ' + str(index) + '\t0.0000\t' + '{:.4f}'.format(XavierShift(window.redshift))
+                           + '\t2\t' + '{:.4f}'.format(window.redshift - window.sigma)
+                           + '\t' + '{:.4f}'.format(window.redshift + window.sigma) + '\n')
+
+            # Else, we just have the convergence field.
+            else:
+                file.write('\t1 \t ' + str(index) + '\t0.0000\t' + '{:.4f}'.format(XavierShift(window.redshift))
+                           + '\t2\t' + '{:.4f}'.format(window.redshift - window.sigma)
+                           + '\t' + '{:.4f}'.format(window.redshift + window.sigma) + '\n')
+
+        file.close()
+
+    @staticmethod
+    def exp_gal_dens(z, mean_dens=30, z_m=0.9):
+        """
+        Function that returns the expected galaxy density at redshift z following the Euclid convention of defining
+        a mean density and mean redshift
+
+        Args:
+            z (float|np.array): Redshift(s) at which to evaluate the observed galaxy density at
+            mean_dens (float): The mean surface density of galaxies. Default is 30 galaxies / arcmin^2, the
+                               Euclid default
+            z_m (float): The mean redshift. Default is 0.9, the Euclid default
+
+        Returns
+            (float): The expected surface galaxy density
+        """
+
+        # Transform the mean redshift into z0
+        z_0 = z_m / np.sqrt(2)
+
+        # Return expected density
+        return mean_dens * (z / z_0) ** 2 * np.exp(-(z / z_0) ** (3 / 2))
+
+    def write_exp_gal_dist(self, **kwargs):
+        """
+        Function that writes a file that contains the expected galaxy densities
+
+        Keyword Args:
+            Passes keyword arguments "mean_dens" and "z_m" into the exp_gal_dens function for varying of the
+            galaxy density parameters
+
+        Returns:
+            None
+        """
+
+        # Filename that we will save the information to
+        filename = 'Galaxy_dens_z_selec-f1.dat'
+        filename = self.folder_path + filename
+
+        file = open(filename, 'w')
+
+        # Print header
+        file.write('# Redshift \t Expected galaxy density distribution [gal / arcmin^2]\n')
+
+        # A rough redshift range that encompasses all wanted redshift values
+        z_range = np.linspace(0, 2.5, 100)
+
+        # Go through each redshift value and write the redshift and galaxy density at that redshift
+        for z in z_range:
+            file.write('{z:.3f} \t {dens:.3f} \n'.format(z=z, dens=self.exp_gal_dens(z, **kwargs)))
+
+        # Close file once done
         file.close()
 
     def write_flask_config_file(self, n_side=2048):
@@ -317,6 +401,11 @@ class CambObject:
             None
 
         """
+
+        # Do we want Flask to run with additional inputs that use the expected galaxy number densities to add noise
+        # the the lensing signal?
+        with_galaxy_counts = self.galaxy_dens
+
         filename = 'FlaskInput.ini'
         filename = self.folder_path + filename
 
@@ -327,8 +416,8 @@ class CambObject:
 
         file.write('## Simulation basics ##\n\n')
         file.write('DIST: \t GAUSSIAN \n')
-        file.write('RNDSEED: \t ' + str(random.randint(1, 10000)) + ' \n')  # TODO: change this randomly?!
-        file.write('POISSON: \t 0 \n')
+        file.write('RNDSEED: \t ' + str(random.randint(1, 10000)) + ' \n')
+        file.write('POISSON: \t 1 \n')  # Enable Poisson galaxy noise
 
         file.write('\n## Cosmology ##\n\n')
         file.write('OMEGA_m: \t 0.3 \n')
@@ -344,17 +433,24 @@ class CambObject:
         file.write('ALLOW_MISS_CL: \t 0 \n')
         file.write('SCALE_CLS: \t 1.0 \n')
         file.write('WINFUNC_SIGMA: \t -1 \n')
-        file.write('APPLY_PIXWIN: \t 0 \n')  # * changed this
+        file.write('APPLY_PIXWIN: \t 0 \n')  # * should this be zero?
         file.write('SUPPRESS_L: \t -1 \n')
         file.write('SUP_INDEX: \t -1 \n\n')
 
         file.write('\n## Survey selection functions ##\n\n')
         file.write('SELEC_SEPARABLE: \t 1 \n')
         file.write('SELEC_PREFIX: \t 0 \n')
-        file.write('SELEC_Z_PREFIX: \t example-z-selection- \n')
+
+        # Here, if we are using galaxy counts then provide Flask with the expected galaxy densities as a function
+        # of redshift
+        if with_galaxy_counts:
+            file.write('SELEC_Z_PREFIX: \t Galaxy_dens_z_selec- \n')
+        else:
+            file.write('SELEC_Z_PREFIX: \t 0\n')
+
         file.write('SELEC_SCALE: \t 1 \n')
         file.write('SELEC_TYPE: \t 0 \n')
-        file.write('STARMASK: \t 0 \n\n')
+        file.write('STARMASK: \t 0 \n\n')  # TODO: change this when have a mask!
 
         file.write('\n## Multipole information ##\n\n')
         file.write('EXTRAP_DIPOLE: \t 0 \n')
@@ -375,64 +471,63 @@ class CambObject:
         file.write('ZSEARCH_TOL: \t 0.0001 \n\n')
 
         file.write('\n## Output ##\n\n')
-        file.write('EXIT_AT: \t RECOVCLS_OUT \n')
+
+        # If we're using galaxy counts, then we can exit Flask once we have shear with noise, else just exit with Cl's
+        if with_galaxy_counts:
+            file.write('EXIT_AT: \t ELLIPFITS_PREFIX \n')
+        else:
+            file.write('EXIT_AT: \t RECOVCLS_OUT \n')
+
         file.write('FITS2TGA: \t 0 \n')
         file.write('USE_UNSEEN: \t 1 \n')
         file.write('LRANGE_OUT: \t 2 ' + str(self.ell_max) + '\n')
         file.write('MMAX_OUT: \t -1 \n')
         file.write('ANGULAR_COORD: \t 0 \n')
-        file.write('DENS2KAPPA: \t 0 \n')
+        file.write('DENS2KAPPA: \t 0 \n\n')
 
         file.write('FLIST_OUT: \t 0 \n')
-        file.write('SMOOTH_CL_PREFIX: \t 0 \n')  # * Output-smoothed-cl-
+        file.write('SMOOTH_CL_PREFIX: \t 0 \n')
         file.write('XIOUT_PREFIX: \t 0 \n')
         file.write('GXIOUT_PREFIX: \t 0 \n')
         file.write('GCLOUT_PREFIX: \t 0 \n')
         file.write('COVL_PREFIX: \t 0 \n')
         file.write('REG_COVL_PREFIX: \t 0 \n')
-        file.write('REG_CL_PREFIX: \t 0 \n')  # * Output-Reg-Cl-
+        file.write('REG_CL_PREFIX: \t 0 \n')
         file.write('CHOLESKY_PREFIX: \t 0 \n')
-        file.write('AUXALM_OUT: \t 0 \n')  # TODO: change this?!
+        file.write('AUXALM_OUT: \t 0 \n')
         file.write('RECOVAUXCLS_OUT: \t 0 \n')
         file.write('AUXMAP_OUT: \t 0 \n')
         file.write('DENS2KAPPA_STAT: \t 0 \n')
 
-        write_map = False
+        # The MAP_OUT file is simply the field values at each coordinate on the sky after cosmic variance, but before
+        # applying the mask and Poisson noise
+        file.write('MAP_OUT: \t 0 \n')
+        file.write('MAPFITS_PREFIX: \t 0 \n')
 
-        if write_map:
-            file.write('MAP_OUT: \t Output-Map.txt \n')
-        else:
-            file.write('MAP_OUT: \t 0 \n')
-
+        # These are the recovered alm & clm values that are computed from the above map. i.e. they contain are the
+        # power spectrum of the raw field values that has noise only due to cosmic variance.
         file.write('RECOVALM_OUT: \t 0 \n')
         file.write('RECOVCLS_OUT: \t Output-Cl.dat \n')
 
-        write_shear_alm = False
-        write_shear_fits = False
-        write_shear_map = False
+        # Here, we have the shear values output the convergence and shear values at each redshift bin of the lensing
+        # field, but with noise only due to cosmic variance, NOT due to the mask or Poisson galaxy sampling.
+        file.write('SHEAR_ALM_PREFIX: \t 0 \n')
+        file.write('SHEAR_FITS_PREFIX: \t 0 \n')  # output is (kappa, gamma1, gamma2)
+        file.write('SHEAR_MAP_OUT: \t 0 \n')
 
-        if write_shear_alm:
-            file.write('SHEAR_ALM_PREFIX: \t Output-shear-alm- \n')
+        # This is the map data of each field AFTER applying cosmic variance, mask, and Poisson galaxy sampling.
+        # i.e. this is the most "noisiest" output, but is the closest to the observed values and what we need to model
+        if with_galaxy_counts:
+            file.write('MAPWERFITS_PREFIX: \t Output-poisson-map- \n')
         else:
-            file.write('SHEAR_ALM_PREFIX: \t 0 \n')
-
-        if write_shear_fits:
-            file.write('SHEAR_FITS_PREFIX: \t Output-shear-map-fits- \n')
-        else:
-            file.write('SHEAR_FITS_PREFIX: \t 0 \n')
-
-        if write_shear_map:
-            file.write('SHEAR_MAP_OUT: \t Output-shear-map.dat \n')
-        else:
-            file.write('SHEAR_MAP_OUT: \t 0 \n')
-
-        file.write('MAPFITS_PREFIX: \t 0 \n')  # * Output-converg-map-
-        file.write('MAPWERFITS_PREFIX: \t 0 \n')  # * Output-poisson-map-
-        file.write('ELLIPFITS_PREFIX: \t 0 \n')  # * Output-ellip-map-
+            file.write('MAPWERFITS_PREFIX: \t 0 \n')
         file.write('MAPWER_OUT: \t 0 \n')
-        file.write('ELLIP_MAP_OUT: \t 0 \n')
-        file.write('CATALOG_OUT: \t 0 \n')
 
+        # Here outputs galaxy ellipticities values at each coordinate that includes galaxy noise
+        file.write('ELLIPFITS_PREFIX: \t Output-Ellip-map- \n')
+        file.write('ELLIP_MAP_OUT: \t 0 \n')
+
+        file.write('CATALOG_OUT: \t 0 \n')
         file.write('\nCATALOG_COLS: \t theta phi z kappa gamma1 gamma2 ellip1 ellip2\n')
 
         file.close()
@@ -734,7 +829,8 @@ class CambObject:
         Args:
             input_file (str): Path to input file
 
-        Returns: (int) The number of lines
+        Returns:
+            (int) The number of lines
         """
 
         # Ensure that the file exists before opening it
@@ -859,28 +955,57 @@ class CambObject:
         # Obtain the Planck colour-map used for plotting maps here
         planck_cmap = make_planck_colour_map()
 
+        # If we have galaxy counts, then the lensing signal is the second field, else it is simply the first
+        field_num = 2 if self.galaxy_dens else 1
+
+        # Find the header character of the output Cl file from Flask
+        cl_head_char = subprocess.run('head -c 1 Output-Cl.dat',
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
+                                      cwd=self.folder_path, shell=True).stdout
+
+        if cl_head_char == '#':
+            subprocess.run('tail -c +3 Output-Cl.dat >> tmp_file.dat && mv tmp_file.dat Output-Cl.dat',
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
+                           cwd=self.folder_path, shell=True)
+
+        flask_cl_df = pd.read_csv(self.folder_path + 'Output-Cl.dat', sep=r'\s+')
+        flask_cl_df.rename(columns={"l": "ell"}, inplace=True)
+
         # Go through each redshift bin individually and make plots for each
         for z_bin in range(1, self.num_redshift_bins + 1):
-            # Read in the generated shear map from Flask
-            # maps = hp.read_map(self.folder_path + 'Output-shear-map-fits-f1z' + str(z_bin) + '.fits', verbose=False,
-            #                    field=None)
+            # Read in the generated shear map with noise from Flask
+            converg_w_noise = hp.read_map(
+                self.folder_path + 'Output-poisson-map-f' + str(field_num) + 'z' + str(z_bin) + '.fits',
+                verbose=False, field=None)
+
+            ellip_w_noise = hp.read_map(
+                    self.folder_path + 'Output-Ellip-map-f' + str(1) + 'z' + str(z_bin) + '.fits',
+                    verbose=False, field=None)
 
             # Split the shae map into a convergence, shear1, and shear2 maps
             # converg_map = maps[0]
             # shear_map1 = maps[1]
             # shear_map2 = maps[2]
 
-            # Plot the convergence and shear1 maps
-            # hp.mollview(converg_map, cmap=planck_cmap, title='Convergence for redshift bin ' + str(z_bin))
-            # hp.graticule(verbose=False, alpha=0.6)
-            # hp.mollview(shear_map1, cmap=planck_cmap, title='Shear for redshift bin ' + str(z_bin))
-            # hp.graticule(verbose=False, alpha=0.6)
+            # Plot the convergence map
+            hp.mollview(converg_w_noise, cmap=planck_cmap,
+                        title='Convergence with shape noise for redshift bin ' + str(z_bin))
+            hp.graticule(verbose=False, alpha=0.6)
+
+            hp.mollview(ellip_w_noise[1], cmap=planck_cmap, title='Ellipticity map for redshift bin ' + str(z_bin))
+            hp.graticule(verbose=False, alpha=0.6)
 
             # Use HealPy functions to turn the maps into Cl's
             start_time = time.time()
-            # ? converg_cl = hp.sphtfunc.anafast(converg_map, lmax=self.ell_max)
-            print('Converg took {sec} seconds'.format(sec=time.time() - start_time))
+            converg_cl = hp.sphtfunc.anafast(converg_w_noise, lmax=self.ell_max)
+            print('Cl estimation fromt the convergence map w/noise took {sec} seconds'
+                  .format(sec=time.time() - start_time))
 
+            # Now compute the ellipticity Cl's
+            ellip_cl1 = hp.sphtfunc.anafast(ellip_w_noise[1], lmax=self.ell_max)
+            ellip_cl2 = hp.sphtfunc.anafast(ellip_w_noise[2], lmax=self.ell_max)
+
+            """
             start_time = time.time()
             # ? shear_cl1 = hp.sphtfunc.anafast(shear_map1, lmax=self.ell_max)
             print('Shear1 took {sec} seconds'.format(sec=time.time() - start_time))
@@ -888,43 +1013,59 @@ class CambObject:
             start_time = time.time()
             # ? shear_cl2 = hp.sphtfunc.anafast(shear_map2, lmax=self.ell_max)
             print('Shear2 took {sec} seconds'.format(sec=time.time() - start_time))
-
-            flask_cl_df = pd.read_csv(
-                    self.folder_path + 'Output-Cl.dat',
-                    header=None, names=['ell', 'Cl-z1z1', 'Cl-z1z2', 'Cl-z2z2'], sep=r'\s+', skiprows=1)
+            """
 
             # Plot various Cl's
-            plt.figure(figsize=(12, 7))
-            # plt.loglog(self.ells, self.ells * (self.ells + 1) * self.my_cls[z_bin - 1][2:] / (2 * np.pi), label='My Cl', color='yellow', lw=2.25)
-            # plt.loglog(self.ells, self.ells * (self.ells + 1) * converg_cl[2:] / (2 * np.pi), label=r'$C_\ell$ converg', color='purple')
-            # plt.loglog(self.ells, self.ells * (self.ells + 1) * shear_cl1[2:] / (2 * np.pi), label=r'$C_\ell$ shear 1')
-            # plt.loglog(self.ells, self.ells * (self.ells + 1) * shear_cl2[2:] / (2 * np.pi), label=r'$C_\ell$ shear 2')
-            # plt.loglog(self.ells, self.ells * (self.ells + 1) * (shear_cl1[2:] + shear_cl2[2:]) / (2 * np.pi),
-            #            label=r'$C_\ell$ shear 1 + 2', color='purple', lw=2)
+            plt.figure(figsize=(13, 7))
+
+            # Plot the theory Cl's
             plt.loglog(self.ells, self.ells * (self.ells + 1) *
-                       self.raw_c_ells['W' + str(z_bin) + 'x' + 'W' + str(z_bin)][2:] / (2 * np.pi),
-                       label=r'$C_\ell$ input', lw=1.5, color='blue')
+                       self.raw_c_ells['W' + str(field_num * z_bin) + 'x' + 'W' + str(field_num * z_bin)][2:]
+                       / (2 * np.pi),
+                       label=r'$C_\ell$ input', lw=1.5, color='navy')
+
+            # Plot the full Cl's recovered from the map
+            plt.loglog(self.ells, self.ells * (self.ells + 1) * converg_cl[2:] / (2 * np.pi),
+                       label=r'Converg w/shp. noise', color='tab:green')
+
+            # Plot the Cl's that just have cosmic variance, no shape noise
             plt.loglog(flask_cl_df['ell'],
-                       flask_cl_df['ell'] * (flask_cl_df['ell'] + 1) * flask_cl_df['Cl-z1z1'] / (2 * np.pi), lw=2,
-                       color='navy', label='Cl from Flask')
+                       flask_cl_df['ell'] * (flask_cl_df['ell'] + 1) *
+                       flask_cl_df['Cl-f' + str(field_num) + 'z' + str(z_bin) + 'f' + str(field_num) + 'z' + str(z_bin)]
+                       / (2 * np.pi), lw=2,
+                       color='tab:blue', label='Converg w/out shp. noise')
+
+            plt.loglog(self.ells, self.ells * (self.ells + 1) * ellip_cl1[2:] / (2 * np.pi),
+                       label=r'Ellip1', color='yellow')
+
+            plt.loglog(self.ells, self.ells * (self.ells + 1) * ellip_cl2[2:] / (2 * np.pi),
+                       label=r'Ellip2', color='hotpink')
+
             plt.title(r'$C_\ell$ for redshift bin ' + str(z_bin))
             plt.xlabel(r'$\ell$')
             plt.ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
             plt.legend()
             plt.tight_layout()
-            plt.show()
+            # plt.show()
 
             # Plot various differences in the Cl's
-            plt.figure(figsize=(12, 7))
-            # plt.loglog(self.ells, np.abs(self.my_cls[z_bin - 1][2:] - converg_cl[2:]) / converg_cl[2:], label='Rel difference', color='blue', lw=1.5)
-            plt.loglog(self.ells, np.abs(self.my_cls_cpp[z_bin - 1][2:] - converg_cl[2:]) / converg_cl[2:],
-                       label='Rel. diff. cpp', color='purple', lw=1.5)
-            plt.loglog(self.ells, np.abs(self.my_cls_cpp[z_bin - 1][2:] -
-                                         self.raw_c_ells['W' + str(z_bin) + 'x' + 'W' + str(z_bin)][2:]) /
-                       self.raw_c_ells['W' + str(z_bin) + 'x' + 'W' + str(z_bin)][2:],
-                       label='Rel. diff. btw. input', color='blue', lw=1.5)
+            plt.figure(figsize=(13, 7))
+
+            # Plot the difference between Cl's with shape noise and cosmic variance and input
+            plt.loglog(self.ells, np.abs(converg_cl[2:] -
+                       self.raw_c_ells['W' + str(field_num * z_bin) + 'x' + 'W' + str(field_num * z_bin)][2:]) /
+                       self.raw_c_ells['W' + str(field_num * z_bin) + 'x' + 'W' + str(field_num * z_bin)][2:],
+                       label='$a=$ w/shp. noise, $b=$ input', color='tab:green', lw=1.5)
+
+            # Plot the difference between Cl's without shape noise (but cosmic variance) and input
+            plt.loglog(self.ells, np.abs(
+                    flask_cl_df['Cl-f' + str(field_num) + 'z' + str(z_bin) + 'f' + str(field_num) + 'z' + str(z_bin)] -
+                    self.raw_c_ells['W' + str(field_num * z_bin) + 'x' + 'W' + str(field_num * z_bin)][2:]) /
+                    self.raw_c_ells['W' + str(field_num * z_bin) + 'x' + 'W' + str(field_num * z_bin)][2:],
+                    label='$a=$ w/out shp. noise, $b=$ input', color='tab:blue', lw=1.5, alpha=0.55)
+
             plt.xlabel(r'$\ell$')
-            plt.ylabel(r'$|C_{\ell}^{1} - C_{\ell}^{2} | / C_{\ell}^{2} $')
+            plt.ylabel(r'$|C_{\ell}^{a} - C_{\ell}^{b} | / C_{\ell}^{b} $')
             plt.title(r'Relative difference in $C_\ell$ for redshift bin ' + str(z_bin))
             plt.legend()
             plt.tight_layout()
