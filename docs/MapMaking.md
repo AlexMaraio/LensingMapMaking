@@ -143,7 +143,7 @@ for the Γ distribution (*f*) is
 </center>
 
 where Γ is the gamma function, _a_ is called the shape parameter and _b_ is the scale parameter. This distribution has
-a mean _ab_ and a variance _a(b_^2).
+a mean _ab_ and a variance _a b_<sup>2</sup>.
 
 In the limit of large _l_, this distribution approaches a Gaussian due to the central limit theorem, but it is not intrinsically a Gaussian. This effect is very noticeable at small _l_, as seen in the plots above and below.  
 As we wish to investigate the non-Gaussian behaviour of the estimated _Cl_ values at low _l_, we can plot the
@@ -179,7 +179,38 @@ Kurtosis is defined as the fourth moment of a data set, which is given as
 <img src="https://render.githubusercontent.com/render/math?math=\text{Kurt} = \langle \left[ \frac{x_i - \mu}{\sigma} \right]^4 \rangle" height=45> 
 </center>
 
+Here, we use the *excess kurtosis* which is defined as the kurtosis minus three, and so the kurtosis for a Gaussian
+as zero in the plot below.
+
 We can perform the same analysis as above but now for the kurtosis of the data and expected values from the Γ distribution.
 ![Kurtosis plot of Cl values](figures/Cl_Kurtosis.png)
 Here, we also find that the expected values from the Γ distribution closely follow the data for the range _l_ ≳ 20,
 however we find a larger discrepancy between them for small _l_ than for the skew.
+
+## Investigating correlation of Cl values between different *l* values
+
+In theory, as each _alm_ value should be independent of other values, the Cl values should also be independent of each
+other. We can test this by computing the Pearson correlation coefficient between each set of Cl values at different _l_.
+The Pearson correlation coefficient between data vectors _x_ and _y_ is defined as
+
+<center>
+
+![](https://wikimedia.org/api/rest_v1/media/math/render/svg/2b9c2079a3ffc1aacd36201ea0a3fb2460dc226f)
+</center>
+
+This was evaluated for our Cl data up to _l_ of 125 using the `scipy` function `stats.pearsonr`, which is shown in the plot below
+
+![Plot of Pearson correlation](figures/covariance_matrix/Pearson_corre_coeff.png)
+
+Here, we see that the correlation coefficient has a maximum amplitude of around 0.06. This is a very small result for the
+correlation coefficient, which shows that none of the Cl values are strongly correlated for different _l_ values.
+The _p_-value for the correlation was also computed and was found to be very small, which also suggests that different
+Cl sets are not correlated in any way.
+
+The `scipy.stats.pearsonr` function uses the empirically-derived means to find the correlation coefficient, which may
+introduce a small level of bias in the results. Instead, we can repeat this calculation where we are using the
+**theoretical** _Cl_ means and variances from the input array. This gives us the raw covariance matrix, which when evaluated
+on the same data as above gives us
+
+![Plot of raw covariance matrix](figures/covariance_matrix/Raw_covariance_matrix.png)
+
