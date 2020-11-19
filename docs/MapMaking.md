@@ -214,3 +214,38 @@ on the same data as above gives us
 
 ![Plot of raw covariance matrix](figures/covariance_matrix/Raw_covariance_matrix.png)
 
+## Fixing Flask's *Cl* calculation
+
+In the above figures, it is noted that the variance, skew, and kurtosis of the ensemble of *Cl* values is slightly larger
+than the prediction from the Γ distribution. This is especially noticeable at low _l_, in the region where _l_ < 15, or so.
+This was found to come from the strange way that Flask computes _Cl_ values given a set of _alm_ values. Instead of doing
+the normal sum of
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=C_\ell = \frac{1}{2\ell %2B 1} \sum_m |a_{\ell m}|^2" height=40> 
+</center>
+
+where we sum over all _m_ values starting at _m_=-_l_ to _m_=+_l_, Flask performs the alternative sum of 
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=C_\ell = \frac{1}{\ell %2B 1} \sum_{m\!\!=\!\!0}^{m\!\!=\!\!\ell} |a_{\ell m}|^2" height=40> 
+</center>
+
+where we only sum over non-negative _m_ values. This has the affect of effectively double-counting the _m_=0 mode,
+and so the obtained statistics of the _Cl_ values obtained this way is expected to be different from the normal ones.
+
+We can see the effect that this has on our ensemble _Cl_ values by computing a new ensemble of _Cl_ values with the correct
+_Cl_ calculation in place in the Flask source code. The `flask_aux.cpp` file was edited
+[around these lines here](https://github.com/hsxavier/flask/blob/5245d15707b44bbe774d864429159e3d11ec7783/src/flask_aux.cpp#L334).  
+Using the updated code, we find plots of the variance, skew, and kurtosis as
+
+![deviation from mean plot](figures/updated_Cl/Deviation_from_mean.png)
+![deviation from mean plot](figures/updated_Cl/Updated_variance.png)
+![deviation from mean plot](figures/updated_Cl/Updated_skew.png)
+![deviation from mean plot](figures/updated_Cl/Updated_kurtosis.png)
+
+Here, we see that the ensemble statistics for the updated _Cl_ values match the prediction from the Γ distribution far
+better than the previous values. This was done for 6,000 sets of _Cl_ values in each data set.  
+When looking at the plot of the deviation of the average _Cl_ values, it is interesting to see that both lines are
+randomly distributed around zero, which shows that despite Flask's native _Cl_ computation leading to a slightly wrong
+variance, it is an unbiased statistic with regards to the mean.
