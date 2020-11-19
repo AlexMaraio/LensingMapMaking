@@ -1,13 +1,7 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-sns.set(font_scale=1.75, rc={'text.usetex': True})
-
 from lib.RedshiftWindow import RedshiftWindow
 from lib.CambObject import CambObject
 from lib.Visualisations import Viz
 
-import camb
 
 if __name__ == '__main__':
     # Rough Euclid redshift window bins
@@ -27,7 +21,7 @@ if __name__ == '__main__':
 
     # * Initiates three models, linear LCDM, non-linear LCDM, and non-linear wCDM
     linear = CambObject('Linear', 5000, non_linear=False)
-    non_linear = CambObject('Non-linear', 2000, non_linear=True)
+    non_linear = CambObject('Non-linear', 5000, non_linear=True)
     non_linear_de = CambObject('Non-linear-DE', 5000, non_linear=True)  # Non-linear model but now changing dark energy
 
     # * Sets the window functions for our three models
@@ -36,8 +30,12 @@ if __name__ == '__main__':
     non_linear_de.set_window_functions([window1, window2])
 
     non_linear.compute_c_ells()
+
+    """
+    non_linear.experimenting_with_masks()
     non_linear.plot_1x2_map_power_spectrum(key='TxT', nside=2048, use_mask=True)
     non_linear.plot_1x2_map_power_spectrum(key='W2xW2', nside=2048, use_mask=True)
+    """
 
     # * Determines if we want to plot the dark energy models against each other
     plot_dark_energy = True
@@ -59,7 +57,14 @@ if __name__ == '__main__':
         # Plot the matter and dark energy density ratios for LCDM and wCDM models
         viz.plot_omega_matter_de(non_linear, non_linear_de)
 
+        # Plot the expected surface galaxy density distribution
         viz.plot_exp_gal_dens()
+
+        # Plot the effects of dark energy when sigma_8 dependence is isolated
+        viz.isolate_sigma_8()
+
+        # Plot how different scales evolve in LCDM and wCDM models
+        viz.redshift_evo_of_scales()
 
     # * Start of Flask running process
     non_linear.create_fields_info()
