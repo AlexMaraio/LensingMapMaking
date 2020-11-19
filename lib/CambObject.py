@@ -122,10 +122,10 @@ class CambObject:
 
     def set_flask_executable(self, path):
         """
-        Function to set the executable path for the FLASK software
+        Function to set the executable path for the Flask software
 
         Args:
-            path (str): The path of the parameter
+            path (str): File-path that points to the Flask executable file
 
         Returns:
              None
@@ -136,7 +136,7 @@ class CambObject:
 
         # First check that the file exists
         if not path.is_file():
-            raise RuntimeError('The given path for FLASK is not correct! Please check.')
+            raise RuntimeError('The given path for Flask is not correct! Please check.')
 
         # Then check it is an executable
         if not os.access(path, os.X_OK):
@@ -646,6 +646,7 @@ class CambObject:
         for run_num in range(num_runs):
             self.run_flask(use_rnd=True)
 
+            # TODO: change these labels to deal with galaxy counts too!
             # Read in the new power spectrum
             cl_df = pd.read_csv(self.folder_path + 'Output-Cl.dat', header=None,
                                 names=['ell', 'Cl-f1z1f1z1', 'Cl-f1z1f1z2', 'Cl-f1z2f1z2'], sep=r'\s+', skiprows=1)
@@ -1319,6 +1320,8 @@ class CambObject:
         wmap_masked = hp.ma(wmap_data) * 1E3
         wmap_masked.mask = np.logical_not(wmap_mask)
 
+        wmap_masked += np.random.normal(loc=0, scale=250, size=12 * 512**2)
+
         planck_cmap = make_planck_colour_map()
         hp.mollview(wmap_data, cmap='inferno', norm="hist", min=-1, max=1, title='WMAP data with no mask (hist. equal cmap)')
         hp.graticule(verbose=False, alpha=0.8)
@@ -1326,6 +1329,56 @@ class CambObject:
         hp.mollview(wmap_mask, cmap='magma', title='WMAP mask')
         hp.graticule(verbose=False, alpha=0.8)
 
-        hp.mollview(wmap_masked.filled(), cmap='viridis', title='WMAP data with mask', unit='$\mu$K')
+        hp.mollview(wmap_masked.filled(), cmap='viridis', title='WMAP data with mask', unit=r'$\mu$K')
         hp.graticule(verbose=False, alpha=0.8)
+        plt.show(block=False)
+
+        n_side = 2048
+
+        n_pix = 12 * n_side ** 2
+        random_map1 = np.random.normal(loc=0, scale=1, size=n_pix)
+        random_map2 = np.random.normal(loc=0, scale=np.sqrt(10), size=n_pix)
+        hp.mollview(random_map1, title="Gasussian random noise in each pixel", norm="hist", cmap='viridis')
+        hp.graticule(verbose=False)
+
+        cl1 = hp.anafast(random_map1, lmax=2000)
+        cl2 = hp.anafast(random_map2, lmax=2000)
+        ell = np.arange(2, 2000 + 1)
+
+        plt.figure(figsize=(13, 7))
+        plt.loglog(ell, ell * (ell + 1) * cl1[2:] / (2 * np.pi), label=r'$\sigma^2 = 1$')
+        plt.loglog(ell, ell * (ell + 1) * cl2[2:] / (2 * np.pi), label=r'$\sigma^2 = 10$')
+        plt.xlabel(r"$\ell$")
+        plt.ylabel(r"$\ell(\ell+1)C_{\ell} / 2 \pi$")
+        plt.title('Power spectrum of Gaussian random noise')
+
+        plt.legend()
+        plt.tight_layout()
         plt.show()
+
+        intrinsic_gal_ellip = 0.21  # The standard deviation of the intrinsic galaxy ellipticity distirbution
+        avg_gal_den = 30  # This is the average surface galaxy density in [num gals / arc min^2]
+        area_per_pix = 1.49E8 / n_pix  # This is the total area in arcmin^2 divided by the number of pixels
+        num_gal_per_pix = avg_gal_den * area_per_pix
+
+        sigma_noise = num_gal_per_pix * intrinsic_gal_ellip
+
+        print('sigma_noise is: ', sigma_noise)
+
+        new_map = np.zeros(shape=n_pix)
+
+        for i in range(len(new_map)):
+            new_map[i] = np.random.normal(loc=0, scale=sigma_noise)
+
+        print(new_map)
+
+        hp.mollview(new_map)
+        hp.graticule(verbose=False)
+        plt.show()
+
+        noise_cl = hp.anafast(random_map1, lmax=2000)
+        plt.loglog(ell, ell * (ell + 1) * noise_cl[2:] / (2 * np.pi), label=r'$\sigma^2 = 1$')
+        plt.show()
+
+        import sys
+        sys.exit()
