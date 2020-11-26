@@ -16,8 +16,8 @@ if __name__ == '__main__':
     window9 = RedshiftWindow(1.45, 0.05)
     window10 = RedshiftWindow(2.04, 0.15)
 
-    window1 = RedshiftWindow(0.5, 0.05, enable_counts=False)
-    window2 = RedshiftWindow(2.0, 0.05, enable_counts=False)
+    window1 = RedshiftWindow(0.5, 0.05, enable_counts=True)
+    window2 = RedshiftWindow(2.0, 0.05, enable_counts=True)
 
     # * Initiates three models, linear LCDM, non-linear LCDM, and non-linear wCDM
     linear = CambObject('Linear', 5000, non_linear=False)
@@ -31,8 +31,8 @@ if __name__ == '__main__':
 
     non_linear.compute_c_ells()
 
-    """
     non_linear.experimenting_with_masks()
+    """
     non_linear.plot_1x2_map_power_spectrum(key='TxT', nside=2048, use_mask=True)
     non_linear.plot_1x2_map_power_spectrum(key='W2xW2', nside=2048, use_mask=True)
     """
@@ -54,6 +54,9 @@ if __name__ == '__main__':
         # Plot the lensing power spectra for a varying dark energy model
         viz.plot_varying_de(non_linear, non_linear_de)
 
+        # Now look at how the effects of w_0 and w_a individually affect the spectra
+        viz.dark_energy_w0_w1()
+
         # Plot the matter and dark energy density ratios for LCDM and wCDM models
         viz.plot_omega_matter_de(non_linear, non_linear_de)
 
@@ -65,6 +68,12 @@ if __name__ == '__main__':
 
         # Plot how different scales evolve in LCDM and wCDM models
         viz.redshift_evo_of_scales()
+
+        # Plot the effects of changing the neutrino masses
+        viz.effect_of_neutrino_mass()
+
+        # Plot the effects of changing the number of massive neutrinos
+        viz.neutrino_numbers()
 
     # * Start of Flask running process
     non_linear.create_fields_info()
