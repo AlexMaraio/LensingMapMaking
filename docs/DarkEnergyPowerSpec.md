@@ -191,3 +191,148 @@ It is interesting to see that on very large and very non-linear scales, the matt
 larger for *w*CDM over ΛCDM, which suggests that different scales evolve differently when we introduce evolving dark energy
 into the universe's evolution. Hence, the way different scales evolves could be a way to discriminate between different
 models of dark energy.
+
+## Differences between w_0 and w_a
+
+In the above discussions, we have been looking at the effects of changing the dark energy equation of state in two ways:
+firstly the value today, and secondly its evolution with scale factor as the universe expands. Recalling that we can
+parametrise this evolution in the following way
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=w(a) = w_0 %2B w_a(1-a)," height=20> 
+</center>
+
+we find that we have two values for each model, w_0 and w_a. Hence, we wish to be able to isolate the affects of changing
+w_0 or w_a individually and seeing what changes in the observed spectra.
+
+First, we will look at the evolution of the ratio of the matter and dark energy densities with respect to the critical
+density, as a function of scale factor. We do this for three models
+
+* The ΛCDM model where dark energy is a fixed cosmological constant, hence w_0 = -1 and w_a = 0,
+* A wCDM model where we still have a fixed equation-of-state, but now slightly more positive at w_0 = -0.8 and w_a = 0,
+* A wCDM model but where we now consider an evolving equation-of-state where we still have w_0=-1 today, but w_a=0.2
+
+We note that as a -> 0, both wCDM models predict the same equation-of-state value. Calculating the evolution gives us:
+
+![Omega matter lambda evolution](figures/wCDM_w0_wa/Omega_evolution.png)
+
+Here, we see that both wCDM models predict a larger dark energy component in the past, and so both predict a lower matter
+density at low redshifts. It is interesting to see that the increased dark energy in the third model where we increased
+w_a takes a while to kick-in as we look back at decreasing *a*.
+
+### Matter power spectrum
+
+Now that we have the background evolution of our three models, we can see what the matter power spectrum looks like in these
+models. Here, z1 = 0.5 and z2 = 2, as usual.
+
+![Matter power spec](figures/wCDM_w0_wa/Matter_powerspec.png)
+
+Here, we can just about see that the model with a lower value of w0 predicts a much smaller matter power spectra, whereas
+the model with an increased wa value predicts only very smaller values for the spectra. To quantify these differences, we
+can take the ratios of the wCDM models with respect to the ΛCDM model
+
+![Ratio of matter power spec](figures/wCDM_w0_wa/Matter_powerspec_ratio.png)
+
+This confirms that by changing the equation-of-state parameter w_0 for the whole evolution causes the largest affect
+on the growth of structure as the additional expansion suppresses growth. We also see this characteristic "spoon"-like
+behaviour that is present in both models at both redshifts.
+
+### Lensing power spectrum
+
+We can now repeat the same analysis, but now for the lensing power spectrum. Evaluating this for the same models and
+redshifts as above gives us
+
+![Lensing power spec](figures/wCDM_w0_wa/Lensing_powerspec.png)
+![Ratio of lensing power spec](figures/wCDM_w0_wa/Lensing_powerspec_ratio.png)
+
+This is exactly as expected given the matter power spectra, the model changing w0 has the largest difference in lensing
+power, whereas increasing wa has a much smaller effect.  
+We note that the differences in the lensing power spectra is slightly larger than for the matter power spectra, especially
+when considering both redshift bins.
+
+# The effects of massive neutrinos
+
+It is widely accepted that neutrinos have mass, but how *much* mass they have is still up for debate. So far, the best
+constraints on neutrino masses come from the sum of the individual neutrino masses, Σmν. The latest constraints on
+this value comes from Planck 2018 and is
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=\sum m_\nu < 0.12 \,\,\textrm{eV}," height=22.5> 
+</center>
+
+which restricts the neutrinos to have quite a small mass, but still not massless!  
+Given then non-zero mass, we can now ask what are their effects on the matter and lensing power spectra? To do so, we first
+construct a model where all neutrinos are massless, and then calculate results for different sum of the neutrino masses.
+
+## Changing the sum of the neutrino masses
+
+The first thing that we looked at was changing the sum of the neutrino masses. We considered three models
+
+* The first where all neutrinos are massless, i.e. Σmν = 0, to get a base level
+* Secondly, where Σmν = 0.10 eV, which is well within the allowed tolerances from Planck, giving reasonable predictions
+  for the actual neutrino masses
+* Lastly, where Σmν = 0.25 eV, which is larger than the allowed bounds, but lets us exaggerate the effects of neutrinos
+  significantly.
+
+### Matter power spectrum
+
+First, let's look at the effects of neutrinos on the matter power spectrum
+
+![Matter power spec](figures/massive_neutrinos/Matter_powerspec.png)
+
+Here, we see that as we increase the sum of the neutrino masses, the large-scale perturbations (small *k*) are relatively
+unchanged, however the small-scale, non-linear perturbations are significantly suppressed. This makes sense for two reasons:
+
+1. Neutrinos originally start off as ultra-relativistic particles in the very early universe, and so their energy density
+   originally decays as a<sup>-4</sup>, like radiation. But, as they have a non-zero mass, they later transition to being
+   more like ordinary matter, and so their density decays like a<sup>-3</sup>. This modifies the expansion rate through
+   the Friedmann equation, and so we expect the growth of structure to be different for different masses.
+
+2. As neutrinos still move very fast even in the late universe, they can stream out of high-density regions and so damp
+   the growth of structure on small-scales. Perturbations on scales smaller than this typical distance that the neutrinos
+   can travel are suppressed.
+
+We can look at the detailed differences between our three lines by taking the ratio of the two massive neutrino lines
+with respect to the massless neutrinos prediction.
+
+![Matter power spec ratio](figures/massive_neutrinos/Matter_powerspec_ratio.png)
+
+Here, we see this characteristic suppression of the density perturbations on small scales due to this free-streaming.
+We also see that this damping behaviour is almost independent of the redshift that we observe the matter power spectrum at.
+
+### Lensing power spectrum
+
+We can now repeat the same analysis, but now looking at the lensing power spectrum
+
+![Lensing power spec](figures/massive_neutrinos/Lensing_powerspec.png)
+
+Here, we see the same structure as seen in the matter power spectrum, the small-scale perturbations are suppressed when
+increasing the total neutrino masses, and so there is less weak lensing from large-scale structure.
+
+![Lensing power spec ratio](figures/massive_neutrinos/Lensing_powerspec_ratio.png)
+
+Taking the ratios yield the same results as before, the more massive neutrinos are the more damped the small-scale
+perturbations are.
+
+## Changing the number of massive neutrinos
+
+By default, CAMB assumes that there is a single massive neutrino that has all of the mass with two massless neutrinos.
+We can change this by manually specifying that there should be three massive neutrinos that have their masses sum to the
+provided mass. Their individual masses could then be given by either the 'normal' or 'inverted' mass hierarchy.
+
+To look into how this small affect changes the power spectra, we can take the ratio of the prediction for three massive
+neutrinos with respect to a single massive neutrinos, for different total neutrino masses.
+
+![Matter power spec ratio](figures/massive_neutrinos/Matter_powerspec_ratio_3nu1nu.png)
+
+Here, we see some very interesting results: on the very largest scales both models predict the same amplitude, but as we
+go to smaller scales (but still well within the linear regime) the prediction for three neutrinos falls significantly below
+that for one massive neutrino. This then rises up again when looking at very non-linear scales.  
+These effects are present for both sums of neutrino masses, but is more exaggerated for the heavier neutrinos.
+
+![Lensing power spec ratio](figures/massive_neutrinos/Lensing_powerspec_ratio_3nu1nu.png)
+
+We see the same story when looking at the lensing power spectrum, on the largest scales the three neutrinos power spectrum
+falls below that of one massive neutrino, but then rises up on the non-linear scales.
+
+We note that the deviation between these models peaks at around +/- 2% in both spectra.
