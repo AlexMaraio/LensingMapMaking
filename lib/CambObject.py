@@ -1335,53 +1335,75 @@ class CambObject:
 
         hp.mollview(wmap_masked.filled(), cmap='viridis', title='WMAP data with mask', unit=r'$\mu$K')
         hp.graticule(verbose=False, alpha=0.8)
-        plt.show(block=False)
-
-        n_side = 2048
-
-        n_pix = 12 * n_side ** 2
-        random_map1 = np.random.normal(loc=0, scale=1, size=n_pix)
-        random_map2 = np.random.normal(loc=0, scale=np.sqrt(10), size=n_pix)
-        hp.mollview(random_map1, title="Gasussian random noise in each pixel", norm="hist", cmap='viridis')
-        hp.graticule(verbose=False)
-
-        cl1 = hp.anafast(random_map1, lmax=2000)
-        cl2 = hp.anafast(random_map2, lmax=2000)
-        ell = np.arange(2, 2000 + 1)
-
-        plt.figure(figsize=(13, 7))
-        plt.loglog(ell, ell * (ell + 1) * cl1[2:] / (2 * np.pi), label=r'$\sigma^2 = 1$')
-        plt.loglog(ell, ell * (ell + 1) * cl2[2:] / (2 * np.pi), label=r'$\sigma^2 = 10$')
-        plt.xlabel(r"$\ell$")
-        plt.ylabel(r"$\ell(\ell+1)C_{\ell} / 2 \pi$")
-        plt.title('Power spectrum of Gaussian random noise')
-
-        plt.legend()
-        plt.tight_layout()
         plt.show()
 
-        intrinsic_gal_ellip = 0.21  # The standard deviation of the intrinsic galaxy ellipticity distirbution
+    def noise_simulations(self):
+        """
+        Function that generates random Gaussian noise due to the intrinsic ellipticities of galaxies in each pixel.
+
+        Returns:
+            None
+        """
+
+        # Read in the convergence map that has been previously calculated
+        converg_map = hp.read_map(self.folder_path + 'Output-poisson-map-f2z2.fits', verbose=False, field=None)
+
+        # Convert this map to a set of Cl values
+        converg_cls = hp.anafast(converg_map, lmax=self.ell_max)
+
+        # Show the map
+        hp.mollview(converg_map, cmap=make_planck_colour_map(), title='Converg data')
+        hp.graticule(verbose=False, alpha=0.8)
+
+        # The N_side parameter of the map generated above
+        n_side = 2048
+
+        # Convert our N_side parameter to the number of pixels in the map
+        n_pix = 12 * n_side ** 2
+
+        intrinsic_gal_ellip = 0.21  # The standard deviation of the intrinsic galaxy ellipticity distribution
+
         avg_gal_den = 30  # This is the average surface galaxy density in [num gals / arc min^2]
         area_per_pix = 1.49E8 / n_pix  # This is the total area in arcmin^2 divided by the number of pixels
         num_gal_per_pix = avg_gal_den * area_per_pix
+        print('The average number of galaxies per pixel is {num:.3f}'.format(num=num_gal_per_pix))
 
-        sigma_noise = num_gal_per_pix * intrinsic_gal_ellip
+        # Generate a map which is just Gaussian random noise, with a mean of zero and st.dev. appropriate
+        random_map1 = np.random.normal(loc=0, scale=intrinsic_gal_ellip / np.sqrt(num_gal_per_pix), size=n_pix)
 
-        print('sigma_noise is: ', sigma_noise)
+        # Compute the Cl values for our noise map
+        cl_noise = hp.anafast(random_map1, lmax=self.ell_max)
 
-        new_map = np.zeros(shape=n_pix)
+        # Show our random map
+        hp.mollview(random_map1, title="Gasussian random noise in each pixel", cmap=make_planck_colour_map())
+        hp.graticule(verbose=False, alpha=0.8)
 
-        for i in range(len(new_map)):
-            new_map[i] = np.random.normal(loc=0, scale=sigma_noise)
+        # Add the noise to our existing convergence map
+        converg_w_noise_map = converg_map + random_map1
 
-        print(new_map)
+        # Compute the Cl values for our map with noise
+        converg_cls_w_noise = hp.anafast(converg_w_noise_map, lmax=self.ell_max)
+        ell = np.arange(2, self.ell_max + 1)
 
-        hp.mollview(new_map)
-        hp.graticule(verbose=False)
-        plt.show()
+        # Plot the various Cl's
+        plt.figure(figsize=(13, 7))
+        plt.loglog(ell, ell * (ell + 1) * self.raw_c_ells['W4xW4'][2:] / (2 * np.pi),
+                   lw=2, c='tab:cyan', label=r'Input $C_\ell$')
+        plt.loglog(ell, ell * (ell + 1) * converg_cls[2:] / (2 * np.pi),
+                   lw=2, c='tab:blue', label=r'Map $C_\ell$')
+        plt.loglog(ell, ell * (ell + 1) * cl_noise[2:] / (2 * np.pi),
+                   lw=2, c='orange', label=r'Shape noise')
+        plt.loglog(ell, ell * (ell + 1) * self.raw_c_ells['W4xW4'][2:] / (2 * np.pi) * np.sqrt(2 / (2 * ell + 1)),
+                   lw=2, c='tab:pink', label=r'Cosmic variance')
+        plt.loglog(ell, ell * (ell + 1) * converg_cls_w_noise[2:] / (2 * np.pi),
+                   lw=2, c='tab:green', label=r'Signal with noise')
 
-        noise_cl = hp.anafast(random_map1, lmax=2000)
-        plt.loglog(ell, ell * (ell + 1) * noise_cl[2:] / (2 * np.pi), label=r'$\sigma^2 = 1$')
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
+        plt.title('Power spectrum of with and without Gaussian random noise')
+
+        plt.legend()
+        plt.tight_layout()
         plt.show()
 
         import sys
