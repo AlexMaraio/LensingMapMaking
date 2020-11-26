@@ -1323,10 +1323,14 @@ class CambObject:
         wmap_masked += np.random.normal(loc=0, scale=250, size=12 * 512**2)
 
         planck_cmap = make_planck_colour_map()
-        hp.mollview(wmap_data, cmap='inferno', norm="hist", min=-1, max=1, title='WMAP data with no mask (hist. equal cmap)')
+        hp.mollview(wmap_data, cmap='jet', norm="hist", min=-1, max=1, title='WMAP data with no mask (hist. equal cmap)')
         hp.graticule(verbose=False, alpha=0.8)
 
-        hp.mollview(wmap_mask, cmap='magma', title='WMAP mask')
+        # Plot the WMAP mask using the two coordinate systems
+        hp.mollview(wmap_mask, cmap='magma', title='WMAP mask in Galactic coordinates', coord='G')
+        hp.graticule(verbose=False, alpha=0.8)
+
+        hp.mollview(wmap_mask, cmap='magma', title='WMAP mask in Ecliptic coordinates', coord='GE')
         hp.graticule(verbose=False, alpha=0.8)
 
         hp.mollview(wmap_masked.filled(), cmap='viridis', title='WMAP data with mask', unit=r'$\mu$K')
