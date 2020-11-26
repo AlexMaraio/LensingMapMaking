@@ -249,3 +249,29 @@ better than the previous values. This was done for 6,000 sets of _Cl_ values in 
 When looking at the plot of the deviation of the average _Cl_ values, it is interesting to see that both lines are
 randomly distributed around zero, which shows that despite Flask's native _Cl_ computation leading to a slightly wrong
 variance, it is an unbiased statistic with regards to the mean.
+
+## Including noise
+
+Now that we have fast and accurate methods for obtaining the lensing power spectrum, we wish to include some of the real-world
+effects that may affect the data that we collect. The first effect to be included is modelling the intrinsic ellipticities
+of actual galaxies. To do so, we simply generate Gaussian random noise with a mean of zero and a standard deviation given
+by
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=\sigma = \frac{\sigma_\mathscr{E}}{\sqrt{N}}" height=40> 
+</center>
+
+where σ_e is the average intrinsic ellipticity of galaxies, taken to be 0.21 following Euclid here, and *N* is the number of
+galaxies in each pixel. We assume a flat distribution of galaxies on the sky, where we have 30 galaxies
+per arcmin<sup>2</sup>.
+
+Using this, we can generate a random noise map following this distribution and can simply add this map to our recovered
+convergence map from Flask, and generate *Cl* values for the map with noise, to give
+
+![Cls with noise](figures/Convergence_with_noise.png)
+
+Here we see the characteristic power spectrum for Gaussian random noise, it is simply an increasing straight line.
+Hence, when we add this to our existing power spectrum, we find that it has negligible effects at low *l*, but after *l*
+values of around 900, it starts to have a non-negligible effect on the *Cl* values, and after *l* of around 2000 the power
+spectrum is completely dominated by noise. We also see the large effect of the cosmic variance on low *l* scales, which
+shows that the region of data where we have large a signal-to-noise ratio is only for a small range of *l* values.
