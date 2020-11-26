@@ -632,7 +632,528 @@ class Viz:
         fig4.legend(ncol=3, loc="upper left", bbox_to_anchor=(0, 1), bbox_transform=ax4.transAxes, handlelength=3)
         fig4.tight_layout()
 
-        plt.show()
-
         # Reset the plotting style to default
         sns.set_style('darkgrid')
+
+        # Now evaluate the comoving distance chi as a function of redshift
+        redshifts = np.linspace(0.1, 5, num=500)
+        comov_l = results_l.comoving_radial_distance(redshifts)
+        comov_w = results_w.comoving_radial_distance(redshifts)
+
+        plt.figure(figsize=(13, 7))
+        plt.plot(redshifts, comov_l, c='tab:blue', lw=3, label=r'$\Lambda$CDM')
+        plt.plot(redshifts, comov_w, c='orange', lw=3, label=r'$w$CDM')
+        plt.xlabel(r'$z$')
+        plt.ylabel(r'$\chi(z)$')
+        plt.title('Comoving distance $-$ redshift relation')
+        plt.legend()
+        plt.tight_layout()
+
+        # Also evaluate the angular diameter distance as a function fo redshift
+        ang_dist_l = results_l.angular_diameter_distance(redshifts)
+        ang_dist_w = results_w.angular_diameter_distance(redshifts)
+
+        plt.figure(figsize=(13, 7))
+        plt.plot(redshifts, ang_dist_l, c='tab:blue', lw=3, label=r'$\Lambda$CDM')
+        plt.plot(redshifts, ang_dist_w, c='orange', lw=3, label=r'$w$CDM')
+        plt.xlabel(r'$z$')
+        plt.ylabel(r'$D_{A}(z)$')
+        plt.title('Angular diameter distance $-$ redshift relation')
+        plt.legend()
+        plt.tight_layout()
+
+        # Also evaluate the conformal time eta as a function of redshift
+        conformal_time_l = results_l.conformal_time(redshifts)
+        conformal_time_w = results_w.conformal_time(redshifts)
+
+        plt.figure(figsize=(13, 7))
+        plt.plot(redshifts, conformal_time_l, c='tab:blue', lw=3, label=r'$\Lambda$CDM')
+        plt.plot(redshifts, conformal_time_w, c='orange', lw=3, label=r'$w$CDM')
+        plt.xlabel(r'$z$')
+        plt.ylabel(r'$\eta(z)$')
+        plt.title('Conformal time $-$ redshift relation')
+        plt.legend()
+        plt.tight_layout()
+
+        plt.show()
+
+    def dark_energy_w0_w1(self):
+        """
+        In this function, we want to isolate the effects of changing w0 and wa individually, not just combined like
+        above. This would let us test for degeneracies between them, if they existed.
+
+        Returns:
+            None
+        """
+        # Sets the maximum ell value for our lensing power spectra
+        lmax = 5000
+
+        # Equation-of-state parameter w0 for our two models
+        w0_w0 = -0.8
+        w0_wa = 0.0
+
+        # Equation-of-state parameter wa for the two models
+        wa_w0 = -1.0
+        wa_wa = 0.2
+
+        # ? LCDM model
+        params_LCDM = camb.CAMBparams()
+        params_LCDM.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112)
+        params_LCDM.InitPower.set_params(As=2.1E-9, ns=0.96)
+        params_LCDM.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params_LCDM.NonLinear = camb.model.NonLinear_both
+
+        # ? wCDM cosmology -- but varying w0
+        params_w0CDM = camb.CAMBparams()
+        params_w0CDM.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112)
+        params_w0CDM.InitPower.set_params(As=2.1E-9, ns=0.96)
+        params_w0CDM.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params_w0CDM.NonLinear = camb.model.NonLinear_both
+
+        # Set the w0 and wa values for the wCDM model
+        params_w0CDM.DarkEnergy = camb.dark_energy.DarkEnergyFluid(w=w0_w0, wa=w0_wa)
+
+        # ? wCDM cosmology -- but now varying wa
+        params_waCDM = camb.CAMBparams()
+        params_waCDM.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112)
+        params_waCDM.InitPower.set_params(As=2.1E-9, ns=0.96)
+        params_waCDM.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params_waCDM.NonLinear = camb.model.NonLinear_both
+
+        # Set the w0 and wa values for the wCDM model
+        params_waCDM.DarkEnergy = camb.dark_energy.DarkEnergyFluid(w=wa_w0, wa=wa_wa)
+
+        # Set CAMB to evaluate the matter power spectra at three redshifts
+        params_LCDM.set_matter_power(redshifts=[0, 0.5, 2], kmax=10.0, silent=True)
+        params_w0CDM.set_matter_power(redshifts=[0, 0.5, 2], kmax=10.0, silent=True)
+        params_waCDM.set_matter_power(redshifts=[0, 0.5, 2], kmax=10.0, silent=True)
+
+        # Evaluate the lensing power spectra at two redshifts
+        params_LCDM.SourceWindows = [GaussianSourceWindow(redshift=0.5, source_type='lensing', sigma=0.05),
+                                     GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+        params_w0CDM.SourceWindows = [GaussianSourceWindow(redshift=0.5, source_type='lensing', sigma=0.05),
+                                      GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+        params_waCDM.SourceWindows = [GaussianSourceWindow(redshift=0.5, source_type='lensing', sigma=0.05),
+                                      GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+
+        results_l = camb.get_results(params_LCDM)
+        results_w0 = camb.get_results(params_w0CDM)
+        results_wa = camb.get_results(params_waCDM)
+
+        # * Now plot the dark energy density evolution
+
+        # Set up a log space for the scale factor that starts at a=1E-4 and ends at a=1 (today)
+        a = np.logspace(-3, 0, 10000)
+
+        # Get background densities from CAMB
+        rho_l = results_l.get_background_densities(a, vars=['tot', 'cdm', 'baryon', 'de'])
+        rho_w0 = results_w0.get_background_densities(a, vars=['tot', 'cdm', 'baryon', 'de'])
+        rho_wa = results_wa.get_background_densities(a, vars=['tot', 'cdm', 'baryon', 'de'])
+
+        fig, (ax1, ax2, ax3) = plt.subplots(3, sharex=True, figsize=(13, 10))
+
+        # Plot the evolution of the total matter density ratio for the two models
+        ax1.loglog(a, (rho_l['cdm'] + rho_l['baryon']) / rho_l['tot'], color='tab:blue', ls='-',
+                   label=r'$w_0=-1.0, w_a=0.0$')
+        ax1.loglog(a, (rho_w0['cdm'] + rho_w0['baryon']) / rho_w0['tot'], color='orange', ls='--',
+                   label=r'$w_0 = ' + str(w0_w0) + ', w_a = ' + str(w0_wa) + '$')
+        ax1.loglog(a, (rho_wa['cdm'] + rho_wa['baryon']) / rho_wa['tot'], color='tab:pink', ls='-.',
+                   label=r'$w_0 = ' + str(wa_w0) + ', w_a = ' + str(wa_wa) + '$')
+
+        # Plot the evolution of the dark energy density ratio for the two models
+        ax2.loglog(a, (rho_l['de']) / rho_l['tot'], color='tab:blue', ls='-', lw=2,
+                   label=r'$w_0=-1.0, w_a=0.0$')
+        ax2.loglog(a, (rho_w0['de']) / rho_w0['tot'], color='orange', ls='--', lw=2,
+                   label=r'$w_0 = ' + str(w0_w0) + ', w_a = ' + str(w0_wa) + '$')
+        ax2.loglog(a, (rho_wa['de']) / rho_wa['tot'], color='tab:pink', ls='-.', lw=2,
+                   label=r'$w_0 = ' + str(wa_w0) + ', w_a = ' + str(wa_wa) + '$')
+
+        ax3.loglog(a, (rho_w0['de']) / rho_l['de'], color='orange', ls='--', lw=2,
+                   label=r'$w_0 = ' + str(w0_w0) + ', w_a = ' + str(w0_wa) + '$')
+        ax3.loglog(a, (rho_wa['de']) / rho_l['de'], color='tab:pink', ls='-.', lw=2,
+                   label=r'$w_0 = ' + str(wa_w0) + ', w_a = ' + str(wa_wa) + '$')
+
+        # Add axis labels
+        ax1.set_ylabel(r'$\Omega_{\textrm{m}}$')
+        ax2.set_ylabel(r'$\Omega_{\textrm{DE}}$')
+        ax3.set_ylabel(r'$\rho_{\textrm{DE}}^w / \rho_{\textrm{DE}}^\Lambda$')
+        ax3.set_xlabel(r'$a$')
+
+        # Add legends and show the plot
+        ax1.legend()
+        ax2.legend()
+        ax3.legend()
+        plt.tight_layout()
+        plt.show(block=False)
+
+        # Extract the matter power spectra results
+        k_l, zs_l, pk_l = results_l.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=1000)
+        k_w0, zs_w0, pk_w0 = results_w0.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=1000)
+        k_wa, zs_wa, pk_wa = results_wa.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=1000)
+
+        # * Plot the matter power spectra for our three models
+        fig4, ax4 = plt.subplots(figsize=(13, 7))
+
+        ax4.loglog(k_l, pk_l[1, :], c='tab:blue', label=r'$z_1;\,\, \Lambda$CDM')
+        ax4.loglog(k_w0, pk_w0[1, :], c='orange', label=r'$z_1;\,\, w_0$CDM')
+        ax4.loglog(k_wa, pk_wa[1, :], c='tab:pink', label=r'$z_1;\,\, w_a$CDM')
+
+        ax4.loglog(k_l, pk_l[2, :], c='tab:blue', ls='--', label=r'$z_2;\,\, \Lambda$CDM')
+        ax4.loglog(k_w0, pk_w0[2, :], c='orange', ls='--', label=r'$z_2;\,\, w_0$CDM')
+        ax4.loglog(k_wa, pk_wa[2, :], c='tab:pink', ls='--', label=r'$z_2;\,\, w_a$CDM')
+
+        ax4.set_xlabel(r'$k \,\, [h \textrm{Mpc}^{-1}]$')
+        ax4.set_ylabel(r'$P(k|z) \,\, [(h^{-1} \textrm{Mpc})^3]$')
+        ax4.set_title('Matter power spectrum')
+
+        ax4.legend(ncol=2)
+        fig4.tight_layout()
+
+        # Now obtain the list of Cl's for our three models from CAMB
+        cls_l = results_l.get_source_cls_dict()
+        cls_w0 = results_w0.get_source_cls_dict()
+        cls_wa = results_wa.get_source_cls_dict()
+        ells = np.arange(2, lmax + 1)
+
+        # * Now plot the lensing power spectra for our three models
+        fig5, ax5 = plt.subplots(figsize=(13, 7))
+
+        ax5.loglog(ells, cls_l['W1xW1'][2:lmax + 1], c='tab:blue', ls='--', label=r'$z_1;\,\, \Lambda$CDM')
+        ax5.loglog(ells, cls_w0['W1xW1'][2:lmax + 1], c='orange', ls='--', label=r'$z_1;\,\, w_0$CDM')
+        ax5.loglog(ells, cls_wa['W1xW1'][2:lmax + 1], c='tab:pink', ls='--', label=r'$z_1;\,\, w_a$CDM')
+
+        ax5.loglog(ells, cls_l['W2xW2'][2:lmax + 1], c='tab:blue', label=r'$z_2;\,\, \Lambda$CDM')
+        ax5.loglog(ells, cls_w0['W2xW2'][2:lmax + 1], c='orange', label=r'$z_2;\,\, w_0$CDM')
+        ax5.loglog(ells, cls_wa['W2xW2'][2:lmax + 1], c='tab:pink', label=r'$z_2;\,\, w_a$CDM')
+
+        ax5.set_xlabel(r'$\ell$')
+        ax5.set_ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
+        ax5.set_title('Lensing power spectrum')
+
+        ax5.legend(ncol=2)
+        fig5.tight_layout()
+
+        # * Now plot the ratios of the lensing spectra
+        fig6, ax6 = plt.subplots(figsize=(13, 7))
+
+        ax6.semilogx(ells, cls_w0['W1xW1'][2:lmax + 1] / cls_l['W1xW1'][2:lmax + 1],
+                     c='orange', ls='--', label=r'$z_1; w_0$', lw=3)
+        ax6.semilogx(ells, cls_wa['W1xW1'][2:lmax + 1] / cls_l['W1xW1'][2:lmax + 1],
+                     c='tab:pink', ls='--', label=r'$z_1; w_a$', lw=3)
+
+        ax6.semilogx(ells, cls_w0['W2xW2'][2:lmax + 1] / cls_l['W2xW2'][2:lmax + 1],
+                     c='orange', ls='-', label=r'$z_2; w_0$', lw=3)
+        ax6.semilogx(ells, cls_wa['W2xW2'][2:lmax + 1] / cls_l['W2xW2'][2:lmax + 1],
+                     c='tab:pink', ls='-', label=r'$z_2; w_a$', lw=3)
+
+        ax6.set_xlabel(r'$\ell$')
+        ax6.set_ylabel(r'$C_w(\ell) / C_\Lambda(\ell)$')
+        ax6.set_title(r'Ratio of $w$CDM to $\Lambda$CDM for the lensing power spectrum')
+
+        plt.legend(ncol=2)
+        fig6.tight_layout()
+
+        # * Now plot the ratios of the matter spectra
+        fig7, ax7 = plt.subplots(figsize=(13, 7))
+
+        ax7.semilogx(k_l, pk_w0[1, :] / pk_l[1, :],
+                     c='orange', ls='-', label=r'$z_1; w_0$', lw=3)
+        ax7.semilogx(k_l, pk_wa[1, :] / pk_l[1, :],
+                     c='tab:pink', ls='-', label=r'$z_1; w_a$', lw=3)
+
+        ax7.semilogx(k_l, pk_w0[2, :] / pk_l[2, :],
+                     c='orange', ls='--', label=r'$z_2; w_0$', lw=3)
+        ax7.semilogx(k_l, pk_wa[2, :] / pk_l[2, :],
+                     c='tab:pink', ls='--', label=r'$z_2; w_a$', lw=3)
+
+        ax7.set_xlabel(r'$k \,\, [h \textrm{Mpc}^{-1}]$')
+        ax7.set_ylabel(r'$P_w(k) / P_\Lambda(k)$')
+        ax7.set_title(r'Ratio of $w$CDM to $\Lambda$CDM for the matter power spectrum')
+
+        plt.legend(ncol=2)
+        fig7.tight_layout()
+
+        plt.show()
+
+    def effect_of_neutrino_mass(self):
+        """
+        Here, we want to investigate the effect that changing the sum neutrino masses may have on the matter and lensing
+        power spectra.
+
+        Returns:
+            None
+        """
+
+        # Sets the maximum ell value for our lensing power spectra
+        lmax = 5000
+
+        # Different neutrino masses for our different models to try
+        m_nu_1 = 0
+        m_nu_2 = 0.10
+        m_nu_3 = 0.25
+
+        # ? LCDM cosmology -- but now with no neutrino masses
+        params_nu1 = camb.CAMBparams()
+        params_nu1.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=m_nu_1)
+        params_nu1.InitPower.set_params(As=2.1E-9, ns=0.96)
+        params_nu1.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params_nu1.NonLinear = camb.model.NonLinear_both
+
+        # ? LCDM cosmology -- but now with the third neutrino mass sum
+        params_nu2 = camb.CAMBparams()
+        params_nu2.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=m_nu_2)
+        params_nu2.InitPower.set_params(As=2.1E-9, ns=0.96)
+        params_nu2.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params_nu2.NonLinear = camb.model.NonLinear_both
+
+        # ? LCDM cosmology -- but now with the third neutrino mass sum
+        params_nu3 = camb.CAMBparams()
+        params_nu3.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=m_nu_3)
+        params_nu3.InitPower.set_params(As=2.1E-9, ns=0.96)
+        params_nu3.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params_nu3.NonLinear = camb.model.NonLinear_both
+
+        # Set CAMB to evaluate the matter power spectra at three redshifts
+        params_nu1.set_matter_power(redshifts=[0, 0.5, 2], kmax=10.0, silent=True)
+        params_nu2.set_matter_power(redshifts=[0, 0.5, 2], kmax=10.0, silent=True)
+        params_nu3.set_matter_power(redshifts=[0, 0.5, 2], kmax=10.0, silent=True)
+
+        # Evaluate the lensing power spectra at two redshifts
+        params_nu1.SourceWindows = [GaussianSourceWindow(redshift=0.5, source_type='lensing', sigma=0.05),
+                                    GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+        params_nu2.SourceWindows = [GaussianSourceWindow(redshift=0.5, source_type='lensing', sigma=0.05),
+                                    GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+        params_nu3.SourceWindows = [GaussianSourceWindow(redshift=0.5, source_type='lensing', sigma=0.05),
+                                    GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+
+        results_nu1 = camb.get_results(params_nu1)
+        results_nu2 = camb.get_results(params_nu2)
+        results_nu3 = camb.get_results(params_nu3)
+
+        # Extract the matter power spectra results
+        k_nu1, zs_nu1, pk_nu1 = results_nu1.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=1000)
+        k_nu2, zs_nu2, pk_nu2 = results_nu2.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=1000)
+        k_nu3, zs_nu3, pk_nu3 = results_nu3.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=1000)
+
+        # * Plot the matter power spectra for our three models
+        fig1, ax1 = plt.subplots(figsize=(13, 7))
+
+        ax1.loglog(k_nu1, pk_nu1[1, :], c='tab:blue', label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_1) + '$')
+        ax1.loglog(k_nu2, pk_nu2[1, :], c='orange', label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_2) + '$')
+        ax1.loglog(k_nu3, pk_nu3[1, :], c='tab:pink', label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_3) + '$')
+
+        ax1.loglog(k_nu1, pk_nu1[2, :], c='tab:blue', ls='--', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_1) + '$')
+        ax1.loglog(k_nu2, pk_nu2[2, :], c='orange', ls='--', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_2) + '$')
+        ax1.loglog(k_nu3, pk_nu3[2, :], c='tab:pink', ls='--', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_3) + '$')
+
+        ax1.set_xlabel(r'$k \,\, [h \textrm{Mpc}^{-1}]$')
+        ax1.set_ylabel(r'$P(k|z) \,\, [(h^{-1} \textrm{Mpc})^3]$')
+        ax1.set_title('Matter power spectrum')
+
+        ax1.legend(ncol=2)
+        fig1.tight_layout()
+
+        # Now obtain the list of Cl's for our three models from CAMB
+        cls_nu1 = results_nu1.get_source_cls_dict()
+        cls_nu2 = results_nu2.get_source_cls_dict()
+        cls_nu3 = results_nu3.get_source_cls_dict()
+        ells = np.arange(2, lmax + 1)
+
+        # * Now plot the lensing power spectra for our three models
+        fig2, ax2 = plt.subplots(figsize=(13, 7))
+
+        ax2.loglog(ells, cls_nu1['W1xW1'][2:lmax + 1], c='tab:blue', ls='--',
+                   label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_1) + '$')
+        ax2.loglog(ells, cls_nu2['W1xW1'][2:lmax + 1], c='orange', ls='--',
+                   label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_2) + '$')
+        ax2.loglog(ells, cls_nu3['W1xW1'][2:lmax + 1], c='tab:pink', ls='--',
+                   label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_3) + '$')
+
+        ax2.loglog(ells, cls_nu1['W2xW2'][2:lmax + 1], c='tab:blue', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_1) + '$')
+        ax2.loglog(ells, cls_nu2['W2xW2'][2:lmax + 1], c='orange', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_2) + '$')
+        ax2.loglog(ells, cls_nu3['W2xW2'][2:lmax + 1], c='tab:pink', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_3) + '$')
+
+        ax2.set_xlabel(r'$\ell$')
+        ax2.set_ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
+        ax2.set_title('Lensing power spectrum')
+
+        ax2.legend(ncol=2)
+        fig2.tight_layout()
+
+        # * Now plot the ratios of the lensing spectra
+        fig3, ax3 = plt.subplots(figsize=(13, 7))
+
+        ax3.semilogx(ells, cls_nu2['W1xW1'][2:lmax + 1] / cls_nu1['W1xW1'][2:lmax + 1],
+                     c='orange', ls='--', label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_2) + '$', lw=2)
+        ax3.semilogx(ells, cls_nu3['W1xW1'][2:lmax + 1] / cls_nu1['W1xW1'][2:lmax + 1],
+                     c='tab:pink', ls='--', label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_3) + '$', lw=2)
+
+        ax3.semilogx(ells, cls_nu2['W2xW2'][2:lmax + 1] / cls_nu1['W2xW2'][2:lmax + 1],
+                     c='orange', ls='-', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_2) + '$', lw=2)
+        ax3.semilogx(ells, cls_nu3['W2xW2'][2:lmax + 1] / cls_nu1['W2xW2'][2:lmax + 1],
+                     c='tab:pink', ls='-', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_3) + '$', lw=2)
+
+        ax3.set_xlabel(r'$\ell$')
+        ax3.set_ylabel(r'$C_w(\ell) / C_\Lambda(\ell)$')
+        ax3.set_title(r'Ratio of massive neutrinos with respect to massless neutrinos for lensing power spec')
+
+        plt.legend(ncol=2)
+        fig3.tight_layout()
+
+        # * Now plot the ratios of the matter spectra
+        fig4, ax4 = plt.subplots(figsize=(13, 7))
+
+        ax4.semilogx(k_nu1, pk_nu2[1, :] / pk_nu1[1, :],
+                     c='orange', ls='-', label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_2) + '$', lw=2)
+        ax4.semilogx(k_nu1, pk_nu3[1, :] / pk_nu1[1, :],
+                     c='tab:pink', ls='-', label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_3) + '$', lw=2)
+
+        ax4.semilogx(k_nu1, pk_nu2[2, :] / pk_nu1[2, :],
+                     c='orange', ls='--', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_2) + '$', lw=2)
+        ax4.semilogx(k_nu1, pk_nu3[2, :] / pk_nu1[2, :],
+                     c='tab:pink', ls='--', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_3) + '$', lw=2)
+
+        ax4.set_xlabel(r'$k \,\, [h \textrm{Mpc}^{-1}]$')
+        ax4.set_ylabel(r'$P_w(k) / P_\Lambda(k)$')
+        ax4.set_title(r'Ratio of massive neutrinos with respect to massless neutrinos for matter power spec')
+
+        plt.legend(ncol=2)
+        fig4.tight_layout()
+
+        plt.show()
+
+    def neutrino_numbers(self):
+        """
+        Above, we used CAMB's default neutrino settings: where there is one massive neutrino and two massless ones.
+        However, this may not be the case and so here we look at the effects caused by having three massive neutrinos.
+
+        Returns:
+            None
+        """
+
+        # * We now want to look at the effect of changing the number of massive neutrinos at fixed masses
+
+        lmax = 5000
+
+        # Fixed neutrino masses
+        m_nu_1 = 0.10
+        m_nu_2 = 0.25
+
+        # The number of massive neutrinos
+        n_nu_1 = 1
+        n_nu_2 = 3
+
+        # ? First neutrino mass, but with only one massive neutrino
+        params_nu1 = camb.CAMBparams()
+        params_nu1.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=m_nu_1, num_massive_neutrinos=n_nu_1)
+        params_nu1.InitPower.set_params(As=2.1E-9, ns=0.96)
+        params_nu1.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params_nu1.NonLinear = camb.model.NonLinear_both
+
+        # ? LCDM cosmology -- but now with the three massive neutrinos
+        params_nu2 = camb.CAMBparams()
+        params_nu2.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=m_nu_1, num_massive_neutrinos=n_nu_2)
+        params_nu2.InitPower.set_params(As=2.1E-9, ns=0.96)
+        params_nu2.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params_nu2.NonLinear = camb.model.NonLinear_both
+
+        # ? LCDM cosmology -- one massive neutrino for second mass sum
+        params_nu3 = camb.CAMBparams()
+        params_nu3.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=m_nu_2, num_massive_neutrinos=n_nu_1)
+        params_nu3.InitPower.set_params(As=2.1E-9, ns=0.96)
+        params_nu3.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params_nu3.NonLinear = camb.model.NonLinear_both
+
+        # ? LCDM cosmology -- three massive neutrinos for the second mass sum
+        params_nu4 = camb.CAMBparams()
+        params_nu4.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=m_nu_2, num_massive_neutrinos=n_nu_2)
+        params_nu4.InitPower.set_params(As=2.1E-9, ns=0.96)
+        params_nu4.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params_nu4.NonLinear = camb.model.NonLinear_both
+
+        # Evaluate the matter power spectrum at three redshifts
+        params_nu1.set_matter_power(redshifts=[0, 0.5, 2], kmax=10.0, silent=True)
+        params_nu2.set_matter_power(redshifts=[0, 0.5, 2], kmax=10.0, silent=True)
+        params_nu3.set_matter_power(redshifts=[0, 0.5, 2], kmax=10.0, silent=True)
+        params_nu4.set_matter_power(redshifts=[0, 0.5, 2], kmax=10.0, silent=True)
+
+        # Evaluate the lensing power spectra at two redshifts
+        params_nu1.SourceWindows = [GaussianSourceWindow(redshift=0.5, source_type='lensing', sigma=0.05),
+                                    GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+        params_nu2.SourceWindows = [GaussianSourceWindow(redshift=0.5, source_type='lensing', sigma=0.05),
+                                    GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+        params_nu3.SourceWindows = [GaussianSourceWindow(redshift=0.5, source_type='lensing', sigma=0.05),
+                                    GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+        params_nu4.SourceWindows = [GaussianSourceWindow(redshift=0.5, source_type='lensing', sigma=0.05),
+                                    GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+
+        # Get CAMB to compute results using these four models
+        results_nu1 = camb.get_results(params_nu1)
+        results_nu2 = camb.get_results(params_nu2)
+        results_nu3 = camb.get_results(params_nu3)
+        results_nu4 = camb.get_results(params_nu4)
+
+        # Extract the matter power spectra results
+        k_nu1, zs_nu1, pk_nu1 = results_nu1.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=10000)
+        k_nu2, zs_nu2, pk_nu2 = results_nu2.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=10000)
+        k_nu3, zs_nu3, pk_nu3 = results_nu3.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=10000)
+        k_nu4, zs_nu4, pk_nu4 = results_nu4.get_matter_power_spectrum(minkh=1e-4, maxkh=5, npoints=10000)
+
+        # Now obtain the list of Cl's for our three models from CAMB
+        cls_nu1 = results_nu1.get_source_cls_dict()
+        cls_nu2 = results_nu2.get_source_cls_dict()
+        cls_nu3 = results_nu3.get_source_cls_dict()
+        cls_nu4 = results_nu4.get_source_cls_dict()
+        ells = np.arange(2, lmax + 1)
+
+        # * Plot the ratios of the lensing spectra
+        fig1, ax1 = plt.subplots(figsize=(13, 7))
+
+        ax1.semilogx(ells, cls_nu2['W1xW1'][2:lmax + 1] / cls_nu1['W1xW1'][2:lmax + 1],
+                     c='orange', ls='--', label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_1) + '$', lw=2)
+        ax1.semilogx(ells, cls_nu2['W2xW2'][2:lmax + 1] / cls_nu1['W2xW2'][2:lmax + 1],
+                     c='orange', ls='-', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_1) + '$', lw=2)
+
+        ax1.semilogx(ells, cls_nu4['W1xW1'][2:lmax + 1] / cls_nu3['W1xW1'][2:lmax + 1],
+                     c='tab:blue', ls='--', label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_2) + '$', lw=2)
+        ax1.semilogx(ells, cls_nu4['W2xW2'][2:lmax + 1] / cls_nu3['W2xW2'][2:lmax + 1],
+                     c='tab:blue', ls='-', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_2) + '$', lw=2)
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$C_{3\nu}(\ell) / C_{1\nu}(\ell)$')
+        ax1.set_title(r'Ratio of three neutrinos with respect to one neutrino for lensing power spec')
+
+        plt.legend(ncol=2)
+        fig1.tight_layout()
+
+        # * Now plot the ratios of the matter spectra
+        fig2, ax2 = plt.subplots(figsize=(13, 7))
+
+        ax2.semilogx(k_nu1, pk_nu2[1, :] / pk_nu1[1, :],
+                     c='orange', ls='-', label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_1) + '$', lw=2)
+        ax2.semilogx(k_nu1, pk_nu2[2, :] / pk_nu1[2, :],
+                     c='orange', ls='--', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_1) + '$', lw=2)
+
+        ax2.semilogx(k_nu1, pk_nu4[1, :] / pk_nu3[1, :],
+                     c='tab:blue', ls='-', label=r'$z_1; \Sigma m_\nu = ' + str(m_nu_2) + '$', lw=2)
+        ax2.semilogx(k_nu1, pk_nu4[2, :] / pk_nu3[2, :],
+                     c='tab:blue', ls='--', label=r'$z_2; \Sigma m_\nu = ' + str(m_nu_2) + '$', lw=2)
+
+        ax2.set_xlabel(r'$k \,\, [h \textrm{Mpc}^{-1}]$')
+        ax2.set_ylabel(r'$P_{3\nu}(k) / P_{1\nu}(k)$')
+        ax2.set_title(r'Ratio of three neutrinos with respect to one neutrino for matter power spec')
+
+        plt.legend(ncol=2)
+        fig2.tight_layout()
+
+        plt.show()
