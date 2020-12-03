@@ -93,7 +93,9 @@ if __name__ == '__main__':
     non_linear.set_flask_executable('~/Documents/PhD/Codes/flask/bin/flask')
 
     non_linear.run_flask()
-    non_linear.plot_flask_output()
+    non_linear.euclid_masks()
+    # ? non_linear.plot_flask_output()
+    non_linear.noise_simulations()
 
     # non_linear.multiple_run_flask(3000)
 

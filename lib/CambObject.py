@@ -6,6 +6,7 @@ import time
 import ctypes
 import numpy as np
 from scipy import stats as scistats
+from scipy import constants as sciconst
 import pandas as pd
 import camb
 import healpy as hp
@@ -1337,6 +1338,120 @@ class CambObject:
         hp.graticule(verbose=False, alpha=0.8)
         plt.show()
 
+    def euclid_masks(self):
+        """
+        Function that uses the preliminary Euclid masks and recovers a power spectrum using it
+
+        Returns:
+            None
+        """
+
+        # Read in the preliminary Euclid mask using the correct N_side
+        euclid_mask = hp.read_map('./resources/Euclid_masks/Euclid-gal-mask-2048.fits', verbose=False).astype(
+            np.bool)
+
+        # Compute the fraction of sky let through by the mask
+        sky_fraction = euclid_mask.sum() / euclid_mask.size
+
+        print('Fraction of sky allowed through by the mask is {num:.2f} %'.format(num=100 * sky_fraction))
+
+        # Plot the Euclid mask in galactic coordinates
+        hp.mollview(euclid_mask, cmap='seismic', title='Euclid mask in Galactic coordinates', coord='G')
+        hp.graticule(verbose=False, alpha=0.8)
+
+        # Plot the Euclid mask in ecliptic coordinates
+        hp.mollview(euclid_mask, cmap='seismic', title='Euclid mask in Ecliptic coordinates', coord='GE')
+        hp.graticule(verbose=False, alpha=0.8)
+
+        # Read in the convergence map that has been previously calculated
+        converg_map = hp.read_map(self.folder_path + 'Output-poisson-map-f2z2.fits', verbose=False, field=None)
+
+        # Use the mask to convert the raw map into a masked map
+        masked_map = hp.ma(converg_map)
+        masked_map.mask = np.logical_not(euclid_mask)
+
+        # Plot the raw and masked maps
+        hp.mollview(converg_map, cmap=make_planck_colour_map(), title='Raw converg data')
+        hp.graticule(verbose=False, alpha=0.8)
+
+        hp.mollview(masked_map, cmap=make_planck_colour_map(), title='Converg data with mask')
+        hp.graticule(verbose=False, alpha=0.8)
+
+        # Convert the raw map to a set of Cl values
+        converg_cls = hp.anafast(converg_map, lmax=self.ell_max)
+
+        # Use our masked map to generate a set of Cl values
+        masked_cls = hp.anafast(masked_map, lmax=self.ell_max)
+
+        ell = np.arange(2, self.ell_max + 1)
+
+        # Plot the recovered Cl values
+        plt.figure(figsize=(13, 7))
+        plt.loglog(ell, ell * (ell + 1) * converg_cls[2:] / (2 * np.pi),
+                   lw=3, c='tab:blue', label=r'$C_\ell$ recovered from full map')
+        plt.loglog(ell, ell * (ell + 1) * masked_cls[2:] / (2 * np.pi),
+                   lw=3, c='tab:green', label=r'$C_\ell$ recovered from masked map')
+        plt.loglog(ell, ell * (ell + 1) * masked_cls[2:] / (2 * np.pi) / sky_fraction,
+                   lw=1.5, c='orange', label=r'Naïve correction')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
+        plt.title('Convergence power spectrum with and without mask')
+
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+        plt.show()
+
+    def custom_map(self):
+        """
+        Function to generate a test map that has both the Milky Way and Solar System masked out, but no bright stars yet
+
+        Returns:
+            None
+        """
+        # The N_side parameter for our trial mask
+        n_side = 2048
+        n_pix = 12 * n_side ** 2
+
+        # Create two blank maps where we initially allow all light through the mask
+        map_gal = np.ones(n_pix)
+        map_elp = np.ones(n_pix)
+
+        # Create a cylindrical region in galactic coordinates to represent the Milky Way
+        region_gal = hp.query_strip(nside=n_side, theta1=1 * np.pi/3, theta2=2 * np.pi/3)
+        # Create a cylindrical region in ecliptic coordinates to represent the Solar System
+        region_elp = hp.query_strip(nside=n_side, theta1=2 * np.pi/5, theta2=3 * np.pi/5)
+
+        # Set the regions for the Milky Way and Solar System to zero in the mask
+        map_gal[region_gal] = 0
+        map_elp[region_elp] = 0
+
+        # Plot both the Milky Way and Solar System regions in their coordinate systems on the same figure
+        plt.figure(figsize=(13, 7))
+
+        hp.mollview(map_gal, coord='G', title="Dummy mask of the Milky Way", cmap='seismic', sub=[1, 2, 1],
+                    margins=(0.005, 0.0, 0.0, -0.1))
+        hp.graticule()
+
+        hp.mollview(map_elp, coord='E', title="Dummy mask of the Solar System", cmap='seismic', sub=[1, 2, 2],
+                    margins=(0.0, 0.0, 0.005, -0.1))
+        hp.graticule()
+
+        # Combine the two masks into a single mask.
+        # Note that we have to rotate the Solar System mask from ecliptic coords to galactic coords
+        map_both = np.logical_and(map_gal, hp.rotator.Rotator(coord='EG').rotate_map_pixel(map_elp))
+
+        print('Fraction of sky allowed through by the dummy mask is {num:.2f} %'.format(
+                num=100 * map_both.sum() / map_both.size))
+
+        # Plot the resulting mask
+        hp.mollview(map_both, coord='G', title="Both masks applied together", cmap='seismic')
+        hp.graticule()
+
+        plt.show()
+
     def noise_simulations(self):
         """
         Function that generates random Gaussian noise due to the intrinsic ellipticities of galaxies in each pixel.
@@ -1374,6 +1489,10 @@ class CambObject:
         # Compute the Cl values for our noise map
         cl_noise = hp.anafast(random_map1, lmax=self.ell_max)
 
+        # Compute what the expected Cl VALUE (singular) is for the shape noise.
+        # Here, it is the intrinsic ellipticity variance divided by the number density of galaxies (in radians^2)
+        theory_cl_noise = intrinsic_gal_ellip ** 2 / (avg_gal_den / (sciconst.arcminute ** 2))
+
         # Show our random map
         hp.mollview(random_map1, title="Gasussian random noise in each pixel", cmap=make_planck_colour_map())
         hp.graticule(verbose=False, alpha=0.8)
@@ -1387,20 +1506,24 @@ class CambObject:
 
         # Plot the various Cl's
         plt.figure(figsize=(13, 7))
-        plt.loglog(ell, ell * (ell + 1) * self.raw_c_ells['W4xW4'][2:] / (2 * np.pi),
-                   lw=2, c='tab:cyan', label=r'Input $C_\ell$')
         plt.loglog(ell, ell * (ell + 1) * converg_cls[2:] / (2 * np.pi),
-                   lw=2, c='tab:blue', label=r'Map $C_\ell$')
+                   lw=3, c='tab:blue', label=r'$C_\ell$ recovered from map')
         plt.loglog(ell, ell * (ell + 1) * cl_noise[2:] / (2 * np.pi),
-                   lw=2, c='orange', label=r'Shape noise')
+                   lw=3, c='orange', label=r'Random shape noise')
+        plt.loglog(ell, ell * (ell + 1) * converg_cls_w_noise[2:] / (2 * np.pi),
+                   lw=2, c='tab:green', label=r'Signal + rand shp noise')
         plt.loglog(ell, ell * (ell + 1) * self.raw_c_ells['W4xW4'][2:] / (2 * np.pi) * np.sqrt(2 / (2 * ell + 1)),
                    lw=2, c='tab:pink', label=r'Cosmic variance')
-        plt.loglog(ell, ell * (ell + 1) * converg_cls_w_noise[2:] / (2 * np.pi),
-                   lw=2, c='tab:green', label=r'Signal with noise')
+        plt.loglog(ell, ell * (ell + 1) * self.raw_c_ells['W4xW4'][2:] / (2 * np.pi),
+                   lw=2, c='tab:cyan', label=r'Input $C_\ell$')
+        plt.loglog(ell, ell * (ell + 1) * theory_cl_noise / (2 * np.pi),
+                   lw=2, c='gold', label=r'Theoretical noise')
+        plt.loglog(ell, ell * (ell + 1) * (self.raw_c_ells['W4xW4'][2:] + theory_cl_noise) / (2 * np.pi),
+                   lw=1.25, c='lime', label=r'Theory $C_\ell$ + noise')
 
         plt.xlabel(r'$\ell$')
         plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
-        plt.title('Power spectrum of with and without Gaussian random noise')
+        plt.title('Power spectrum of lensing with and without Gaussian random noise')
 
         plt.legend()
         plt.tight_layout()
