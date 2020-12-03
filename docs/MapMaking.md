@@ -265,6 +265,22 @@ where σ_e is the average intrinsic ellipticity of galaxies, taken to be 0.21 fo
 galaxies in each pixel. We assume a flat distribution of galaxies on the sky, where we have 30 galaxies
 per arcmin<sup>2</sup>.
 
+We now wish to analytically derive what the *Cl* values for a pure Gaussian noise map is. To do so, we can use the fact
+that if we have a pure noise map, then the estimator for the convergence in a given pixel will be
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=\left\langle \kappa \kappa \right\rangle = \frac{\sigma_\mathscr{E}^2}{N}." height=45> 
+</center>
+
+From this, we find the contribution to the total *Cl* values from the noise is given by
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=\C_\ell^\textrm{N} = \frac{\sigma_\mathscr{E}^2}{n}" height=45> 
+</center>
+
+where *n* is the observed galaxy density in units of galaxies per radian<sup>2</sup>. We note that this is independent
+of *l*, and so when we plot *l*(*l* + 1)*Cl*, like below, we expect to see a straight line on a log-log plot.  
+
 Using this, we can generate a random noise map following this distribution and can simply add this map to our recovered
 convergence map from Flask, and generate *Cl* values for the map with noise, to give
 
@@ -275,3 +291,6 @@ Hence, when we add this to our existing power spectrum, we find that it has negl
 values of around 900, it starts to have a non-negligible effect on the *Cl* values, and after *l* of around 2000 the power
 spectrum is completely dominated by noise. We also see the large effect of the cosmic variance on low *l* scales, which
 shows that the region of data where we have large a signal-to-noise ratio is only for a small range of *l* values.
+
+We also see that the random realisation that was chosen for this simulation is very accurately described by the theory lines
+for both the noise and the convergence signal.

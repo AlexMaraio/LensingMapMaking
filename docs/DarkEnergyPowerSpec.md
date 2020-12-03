@@ -336,3 +336,130 @@ We see the same story when looking at the lensing power spectrum, on the largest
 falls below that of one massive neutrino, but then rises up on the non-linear scales.
 
 We note that the deviation between these models peaks at around +/- 2% in both spectra.
+
+## Effects of neutrinos on the energy densities
+
+### Decreased dark energy density
+
+In the above plots, we have change the sum of the neutrinos masses while keeping the cold dark matter and baryon densities
+today fixed. Furthermore, as we required that our models are for a flat universe (*K* = 0), we find that as we increase
+the energy density from neutrinos, we must decrease the dark energy density. We can quantify by taking the ratio of the
+dark energy density of the massive neutrino cases with the massless neutrinos, to give
+
+* 99.7% for Σmν = 0.10 eV
+* 99.2% for Σmν = 0.25 eV
+
+We see that while this is only a very small difference, the reduced dark energy can have a considerable effect on the
+evolution of the universe, such as delaying the epoch of acceleration.
+
+### Decreased matter density parameter
+
+While we are fixing the CDM and baryon density parameters today in our models, the increased neutrino energy density
+will serve to decrease the matter density parameter Ωm in the past. We can quantify this difference by plotting the evolution
+of Ωm as a function of the scale factor for three different neutrino masses
+
+![Neutrino mass effects on Omega_matter](figures/massive_neutrinos/Omega_m_evolution.png)
+
+Here we see that as we increase the sum of the neutrino masses, we get a lower value of Ωm. Then as the lensing power
+spectrum is proportional to Ωm<sup>2</sup>, we would naturally expect to see a lower amplitude for larger neutrino masses.
+
+### Increased total energy density
+
+Above, we saw that for increased neutrino masses, Ωm decreased. We also saw that the dark energy density must be smaller
+for increased neutrino masses too. From this, we can then ask what the evolution of the total energy density is as we change
+the neutrino masses. Here, we take the ratio of the total energy density (from matter, dark energy, radiation, and neutrinos)
+for the case of massive neutrinos with respect to the massless neutrino scenario, which gives us
+
+![Neutrino mass effects on total energy density](figures/massive_neutrinos/Total_energy_dens_evo.png)
+
+Here, we see that as we increase the neutrino masses we are also increasing the total energy density of the universe,
+even though we're having to decrease the dark energy density to compensate.
+
+## Effects of neutrinos on the perturbations
+
+In our above plots, we have seen that the effects of neutrino masses have different effects depending on the scale
+of interest. To investigate this further, we can look at how different neutrino masses directly affect the evolution
+of the density variables δi. These are defined, for a species *i*, as
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=\delta_i \equiv \frac{\delta \rho_i}{\bar{\rho}_i}." height=45> 
+</center>
+
+Hence, these quantify how large the perturbations in the density fields are relative to the mean density.
+
+Here, we evaluate the baryon and cold dark matter density contrasts, along with the "total" density contrast which is
+defined as
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=\delta_\textrm{Tot} \equiv \frac{\rho_c \delta_c %2B \rho_b \delta_b %2B \rho_\nu \delta_\nu}{\rho_b %2B \rho_c %2B \rho_\nu}," height=45> 
+</center>
+
+and so we see how the total density contrast evolves for different neutrino masses.  
+We evaluate these density contrasts on three different scales: a linear scale of *k* = 1E-3, a quasi-linear scale of
+*k* = 5E-2, and a non-linear scale of *k* = 2.
+
+![Neutrino mass effects on perturbation evolution](figures/massive_neutrinos/Perturbations_evo.png)
+
+Here, we see what we generally expected from the effects of massive neutrinos: the larger the sum of the neutrino masses
+the more the perturbations are damped, and smaller-scales are suppressed more than larger ones.
+
+## Isolating σ8 dependence on neutrino masses
+
+In the above investigation of how different neutrino masses affect the matter and lensing power spectra, we have been
+running our simulations with fixed initial conditions: that is we fix As and ns for all models and just vary the neutrino
+mass. However, as we can accurately determine the amplitude of the matter power spectrum today, which is parametrised by
+σ8, regardless of neutrino masses, we can fix this value and work out what the new spectra are.
+
+### σ8 as a function of As
+
+First, as σ8 is not an input parameter to a CAMB model, we need to run a verity of models with different As values to
+compute what the expected σ8 value. This then allows us to invert this relationship to find the approximate value of As
+that would give the same σ8 values between the models. Here, we look at five different models
+
+* Σmν = 0, to get a base level of no neutrino masses
+* Σmν = 0.10 eV, with both one and three massive neutrinos
+* Σmν = 0.25 eV, again with both one and three massive neutrinos
+
+Computing this for our five models gives us
+
+![Sigma_8 as a function of as](figures/massive_neutrinos/Isolate_σ8/As_σ8.png)
+
+Hence, we now have five different As values that all give the same σ8 value once the models have been evolved to today.
+
+### Effects on the matter power spectrum
+
+First, we looked at evaluating the matter power spectrum for our five models at two redshifts: the solid lines corresponds
+to *z* of two, whereas the dashed lines are for *z* = 0.5.
+
+![Sigma_8 dependence on matter power spec](figures/massive_neutrinos/Isolate_σ8/Matter_powerspec.png)
+
+Here, we can (just about) see that the lines for the increased neutrino mass are slightly above the massless neutrino case
+on both the very large scales, and very small scales, with the lines merging at intermediate scales. This makes sense as
+we have normalised the amplitude at a specific scale, but the detailed physics of increasing the neutrino masses causes
+different scales to evolve differently.
+
+To get a better idea of how the different scales evolve when we fix σ8, we can take the ratio of the lines for the
+massive neutrino cases with the massless neutrino case, to give
+
+![Sigma_8 dependence on matter power spec ratio](figures/massive_neutrinos/Isolate_σ8/Matter_powerspec_ratio.png)
+
+Here, we see that on both very large and small scales, the amplitude of our massive neutrinos is larger than for
+massless neutrinos, with this effect growing with the neutrino masses. We also note that there is quite a large redshift
+dependence on this growth, especially for the very non-linear scales.
+
+### Effects on the lensing power spectrum
+
+We can now repeat the same analysis, but focusing on the lensing power spectrum now. Here, we use the same five models
+and the same two redshift bins, again where the solid lines correspond to *z* of two, whereas the dashed lines
+are for *z* = 0.5.
+
+![Sigma_8 dependence on lensing power spec](figures/massive_neutrinos/Isolate_σ8/Lensing_powerspec.png)
+
+Again, we can just about see that as we increase the neutrino masses, we see that the lensing power spectrum has a larger
+amplitude. However, to get a better view of this we again take the ratios
+
+![Sigma_8 dependence on lensing power spec ratio](figures/massive_neutrinos/Isolate_σ8/Lensing_powerspec_ratio.png)
+
+Here, we see the same behaviour as the matter power spectrum: a large increase in power on both the very large scales
+(small *l*) and very small scales (large *l*). This difference clearly grows as we increase the neutrino masses, and
+is larger for only one massive neutrino than for three massive neutrinos. We also see a strong redshift dependence here.
