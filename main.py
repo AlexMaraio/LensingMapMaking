@@ -48,6 +48,10 @@ if __name__ == '__main__':
         # Set up a visualisation class
         viz = Viz()
 
+        viz.isolate_sigma_8_for_neutrinos()
+        # Plot the effects of changing the neutrino masses
+        viz.effect_of_neutrino_mass()
+
         # Plot the linear and non-linear lensing power spectra
         viz.plot_lin_nonlin_pspec(linear, non_linear)
 
