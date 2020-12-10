@@ -1542,6 +1542,10 @@ class CambObject:
         hp.mollview(euclid_mask, cmap='seismic', title='Euclid mask in Ecliptic coordinates', coord='GE')
         hp.graticule(verbose=False, alpha=0.8)
 
+        # Also plot the mask using a spherical model
+        hp.orthview(euclid_mask, rot=(0, 20, 15), title="Euclid mask projected on a sphere", cmap='seismic')
+        hp.graticule(verbose=False)
+
         # Read in the convergence map that has been previously calculated
         converg_map = hp.read_map(self.folder_path + 'Output-poisson-map-f2z2.fits', verbose=False, field=None)
 
@@ -1562,7 +1566,13 @@ class CambObject:
         # Use our masked map to generate a set of Cl values
         masked_cls = hp.anafast(masked_map, lmax=self.ell_max)
 
+        # * We now want to perform a spherical harmonic expansion of the mask, to find what Cl values it brings
+        mask_cls = hp.anafast(euclid_mask, lmax=self.ell_max)
+
         ell = np.arange(2, self.ell_max + 1)
+
+        cl_df = pd.read_csv(self.folder_path + 'Unmasked_Cls.dat', sep=r'\s+')
+        cl_df_mask = pd.read_csv(self.folder_path + 'Masked_Cls.dat', sep=r'\s+')
 
         # Plot the recovered Cl values
         plt.figure(figsize=(13, 7))
@@ -1572,18 +1582,44 @@ class CambObject:
                    lw=3, c='tab:green', label=r'$C_\ell$ recovered from masked map')
         plt.loglog(ell, ell * (ell + 1) * masked_cls[2:] / (2 * np.pi) / sky_fraction,
                    lw=1.5, c='orange', label=r'Naïve correction')
+        plt.loglog(ell, ell * (ell + 1) * self.raw_c_ells['W4xW4'][2:] / (2 * np.pi),
+                   lw=2, c='tab:cyan', label=r'Input $C_\ell$')
+        plt.loglog(cl_df['ell'], cl_df['ell'] * (cl_df['ell'] + 1) * cl_df['Cl-f2z2f2z2'] / (2 * np.pi),
+                   lw=2, c='hotpink', label=r'Flask\'s $C_\ell$')
+        plt.loglog(cl_df_mask['ell'],
+                   cl_df_mask['ell'] * (cl_df_mask['ell'] + 1) * cl_df_mask['Cl-f2z2f2z2'] / (2 * np.pi),
+                   lw=2, c='navy', label=r'Flask\'s $C_\ell$')
 
         plt.xlabel(r'$\ell$')
-        plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
+        plt.ylabel(r'$\ell(\ell+1)C_{\ell}^{\kappa\kappa} / 2 \pi$')
         plt.title('Convergence power spectrum with and without mask')
 
         plt.legend()
         plt.tight_layout()
+
+        plt.figure(figsize=(13, 7))
+        plt.semilogx(ell, (masked_cls[2:] / sky_fraction) / converg_cls[2:],
+                     lw=3, c='tab:blue', label=r'$C_\ell$ recovered from full map')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\hat{C}_{\ell}^{\kappa\kappa} / C_{\ell}^{\kappa\kappa} $')
+        plt.title(r'Ratio of recovered $C_{\ell}^{\kappa\kappa}$ from mask to unmasked values')
+
+        plt.tight_layout()
+
+        # Now plot the Cls from the Euclid mask
+        plt.figure(figsize=(13, 7))
+        plt.loglog(ell, ell * (ell + 1) * mask_cls[2:] / (2 * np.pi),
+                   lw=3, c='tab:blue', label=r'$C_\ell$ recovered from full map')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
+        plt.title(r'Power spectrum of the mask')
+
+        plt.tight_layout()
         plt.show()
 
-        plt.show()
-
-    def custom_map(self):
+    def custom_mask(self):
         """
         Function to generate a test map that has both the Milky Way and Solar System masked out, but no bright stars yet
 
@@ -1599,9 +1635,9 @@ class CambObject:
         map_elp = np.ones(n_pix)
 
         # Create a cylindrical region in galactic coordinates to represent the Milky Way
-        region_gal = hp.query_strip(nside=n_side, theta1=1 * np.pi/3, theta2=2 * np.pi/3)
+        region_gal = hp.query_strip(nside=n_side, theta1=1 * np.pi / 3, theta2=2 * np.pi / 3)
         # Create a cylindrical region in ecliptic coordinates to represent the Solar System
-        region_elp = hp.query_strip(nside=n_side, theta1=2 * np.pi/5, theta2=3 * np.pi/5)
+        region_elp = hp.query_strip(nside=n_side, theta1=2 * np.pi / 5, theta2=3 * np.pi / 5)
 
         # Set the regions for the Milky Way and Solar System to zero in the mask
         map_gal[region_gal] = 0
@@ -1628,6 +1664,285 @@ class CambObject:
         # Plot the resulting mask
         hp.mollview(map_both, coord='G', title="Both masks applied together", cmap='seismic')
         hp.graticule()
+
+        # Also plot the mask using a spherical model
+        hp.orthview(map_both, rot=(0, 20, 15), coord='GE', title="Both masks applied together", cmap='seismic')
+        hp.graticule()
+
+        ell = np.arange(2, self.ell_max + 1)
+        # Now find what the power spectrum of our custom mask and the Euclid mask
+        mask_cls = hp.anafast(map_both, lmax=self.ell_max)
+
+        euclid_mask = hp.read_map('./resources/Euclid_masks/Euclid-gal-mask-2048.fits', verbose=False).astype(
+                np.bool)
+        euclid_mask_cls = hp.anafast(euclid_mask, lmax=self.ell_max)
+
+        # Plot the Cl values for our mask and
+        plt.figure(figsize=(13, 7))
+        plt.loglog(ell, ell * (ell + 1) * mask_cls[2:] / (2 * np.pi),
+                   lw=3, c='tab:blue', label=r'Dummy mask')
+        plt.loglog(ell, ell * (ell + 1) * euclid_mask_cls[2:] / (2 * np.pi),
+                   lw=3, c='orange', label=r'Euclid mask')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
+        plt.title(r'Power spectrum of masks')
+
+        plt.legend()
+        plt.tight_layout()
+
+        # * We now want to generate two dummy maps that only have one ell mode activate, with a power of one, and all
+        # * other Cl values equal to zero. From here, we then want to apply a mask and recover the power spectrum
+        # * seeing how our single Cl mode that we started with bleeds across into other modes.
+
+        # The two ell values that we will activate
+        ell1 = 50
+        ell2 = 250
+
+        # Set up two dummy sets of Cl values that are zero, except for a signle ell mode
+        dummy_cls1 = np.zeros(self.ell_max + 1)
+        dummy_cls1[ell1] = 1
+
+        dummy_cls2 = np.zeros(self.ell_max + 1)
+        dummy_cls2[ell2] = 1
+
+        # Convert our Cl array into a map
+        dummy_map1 = hp.synfast(dummy_cls1, nside=n_side, lmax=self.ell_max)
+        dummy_map2 = hp.synfast(dummy_cls2, nside=n_side, lmax=self.ell_max)
+
+        # Plot our two maps
+        plt.figure(figsize=(13, 7))
+        hp.mollview(dummy_map1, title=r"Dummy set of $C_\ell$ where only $\ell = " + str(ell1) + "$ equals one",
+                    cmap='seismic', sub=[1, 2, 1], margins=(0.005, 0.0, 0.0, -0.1))
+        hp.graticule()
+
+        hp.mollview(dummy_map2, title=r"Dummy set of $C_\ell$ where only $\ell = " + str(ell2) + "$ equals one",
+                    cmap='seismic',  sub=[1, 2, 2], margins=(0.0, 0.0, 0.005, -0.1))
+        hp.graticule()
+
+        # Now mask our our map using the Euclid mask
+        dummy_masked_map1 = hp.ma(dummy_map1)
+        dummy_masked_map1.mask = np.logical_not(euclid_mask)
+
+        dummy_masked_map2 = hp.ma(dummy_map2)
+        dummy_masked_map2.mask = np.logical_not(euclid_mask)
+
+        # Recover the Cl's from the masked maps
+        recov_cls1 = hp.anafast(dummy_masked_map1, lmax=self.ell_max)
+        recov_cls2 = hp.anafast(dummy_masked_map2, lmax=self.ell_max)
+
+        # Plot the original and recovered sets of Cl values
+        plt.figure(figsize=(13, 7))
+
+        plt.loglog(ell, ell * (ell + 1) * dummy_cls1[2:] / (2 * np.pi),
+                   lw=3, c='tab:blue', label=r'Dummy $C_\ell$ 1')
+        plt.loglog(ell, ell * (ell + 1) * recov_cls1[2:] / (2 * np.pi),
+                   lw=3, c='orange', label=r'Recovered 1')
+
+        plt.loglog(ell, ell * (ell + 1) * dummy_cls2[2:] / (2 * np.pi),
+                   lw=3, c='tab:green', label=r'Dummy $C_\ell$ 2')
+        plt.loglog(ell, ell * (ell + 1) * recov_cls2[2:] / (2 * np.pi),
+                   lw=3, c='tab:pink', label=r'Recovered 2')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
+        plt.title(r'Recovered power spectrum of a single mode with a mask applied')
+
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+    def theta_phi_only_mask(self):
+        """
+        Function that investigates masks that only vary in the theta OR the phi direction.
+
+        Returns:
+            None
+        """
+
+        @functools.lru_cache(maxsize=None)
+        def gamma(x):
+            """
+            Function that implements the Gamma function using mixed-precision floating point calculations and
+            function memoization to store the results in memory
+
+            Args:
+                x (float): Input value
+
+            Returns:
+                mpmath.mp: mpmath's mixed-precision floating point number
+            """
+            return mpmath.gamma(x)
+
+        def factorial(x):
+            """
+            Converts the factorial function to a Gamma function call
+
+            Args:
+                x (float): Input value
+
+            Returns:
+                mpmath.mp: mpmath's mixed-precision floating point number
+            """
+            return gamma(x + 1)
+
+        def theory_alm_phi(el, m, a_lim):
+            """
+            Function that returns the squared alm value for a mask that only varies in the phi direction, for a given
+            ell, m combination.
+
+            Args:
+                el (int): The l value for this alm
+                m (int): The m value for this alm
+                a_lim (float): Half the width of the mask centred around phi = phi
+
+            Returns:
+                float
+            """
+            alm = (2 + 2 * (-1) ** (el + m)) * mpmath.power(2, 2 * m - 4)
+            alm *= (gamma(el / 2) * gamma((el + m + 1) / 2) / (gamma((el + 3) / 2) * factorial((el - m) / 2))) ** 2
+
+            alm *= factorial(el - m) / factorial(el + m)
+            alm *= mpmath.sin(m * a_lim) ** 2 / np.pi
+
+            return alm
+
+        def theory_cl_phi(el, a_lim):
+            """
+            Function that returns the theoretical Cl value for a mask that only depends in the phi direction.
+
+            Args:
+                el (int): The l value for this Cl
+                a_lim (float): Half the width of the mask centred around phi = pi
+
+            Returns:
+                float
+            """
+            summand = 0
+
+            for m in range(-el, el + 1):
+                summand += theory_alm_phi(el, m, a_lim)
+
+            return summand
+
+        n_side = 2048
+        n_pix = 12 * n_side ** 2
+
+        # Initiate two masks for our theta and phi cuts which have all pixels blocked initially
+        map_theta = np.zeros(n_pix)
+        map_phi = np.zeros(n_pix)
+
+        # Region allowed through in a strip centred around theta = pi / 2
+        a = np.pi / 3
+        b = 2 * np.pi / 3
+
+        region_theta = hp.query_strip(nside=n_side, theta1=a, theta2=b)
+
+        # Set the above pixels to a value of one in the map
+        map_theta[region_theta] = 1
+
+        # Convert our theta mask into a set of Cl values
+        mask_theta_cls = hp.anafast(map_theta, lmax=self.ell_max)
+
+        ells = np.arange(2, self.ell_max + 1)
+
+        # Use our analytic expressions to get approximate values of the theoretically predicted Cl values
+        theory_cls = np.pi * (-scispec.lpmv(0, ells - 1, np.cos(a)) + scispec.lpmv(0, ells + 1, np.cos(a))
+                              + scispec.lpmv(0, ells - 1, np.cos(b)) - scispec.lpmv(0, ells + 1, np.cos(b))) ** 2 / (
+                             (2 * ells + 1) ** 2)
+
+        # Plot the theory vs numerical Cl values
+        plt.figure(figsize=(13, 7))
+        plt.loglog(ells, ells * (ells + 1) * theory_cls / (2 * np.pi),
+                   lw=3, c='orange', label=r'Theory vals')
+
+        plt.loglog(ells, ells * (ells + 1) * mask_theta_cls[2:] / (2 * np.pi),
+                   lw=2, c='tab:blue', label=r'Recov from mask')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
+        plt.title(r'Power spectrum of the simple $\vartheta$ mask')
+
+        plt.legend()
+        plt.tight_layout()
+
+        # Now make the same plot, but only for the even ells
+        plt.figure(figsize=(13, 7))
+
+        ells_even = ells[::2]
+        plt.loglog(ells_even, ells_even * (ells_even + 1) * theory_cls[::2] / (2 * np.pi),
+                   lw=3, c='orange', label=r'Theory vals')
+
+        plt.loglog(ells_even, ells_even * (ells_even + 1) * mask_theta_cls[2::2] / (2 * np.pi),
+                   lw=1, c='tab:blue', label=r'Recov from mask')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
+        plt.title(r'Power spectrum of the simple $\vartheta$ mask for even $\ell$ only')
+
+        plt.legend()
+        plt.tight_layout()
+
+        # Now plot the ratio of our even Cl's
+        plt.figure(figsize=(13, 7))
+        plt.semilogx(ells_even, mask_theta_cls[2::2] / theory_cls[::2],
+                     lw=3, c='tab:blue', label=r'Ratio')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$C_{\ell}^{\textrm{Num}} / C_{\ell}^{\textrm{Th}} $')
+        plt.title(r'Ratio of the numerical to theoretical values for the simple $\vartheta$ mask')
+
+        plt.legend()
+        plt.tight_layout()
+
+        plt.show()
+
+        # Create our phi mask, where we only allow data through between phi = pi - a and phi = pi + a
+        a = np.pi / 3
+        
+        for idx in range(len(map_phi)):
+            theta, phi = hp.pix2ang(2048, idx)
+            if (phi > np.pi - a) and (phi < np.pi + a):
+                map_phi[idx] = 1
+
+        # View the mask, but with phi=pi in the centre of the map
+        hp.mollview(map_phi, rot=[0, 180, 0], cmap='seismic', title=r'Simple mask in the $\phi$ plane')
+        hp.graticule(c='white')
+        plt.show()
+
+        # Convert our mask to a set of numerical Cl's
+        phi_cls = hp.anafast(map_phi, lmax=self.ell_max)
+
+        # Use the theoretical functions to get a set of theory Cl's
+        theory_vals = [theory_cl_phi(i, a) for i in range(2, 2000 + 1)]
+
+        # Plot the numerical vs theory Cl's
+        plt.figure(figsize=(13, 7))
+
+        plt.loglog(ells, ells * (ells + 1) * phi_cls[2:] / (2 * np.pi),
+                   lw=3, c='tab:blue', label=r'Recov from mask')
+
+        plt.loglog(ells, ells * (ells + 1) * theory_vals / (2 * np.pi),
+                   lw=1.5, c='Orange', label=r'Theory vals')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
+        plt.title(r'Power spectrum of the simple $\phi$ mask')
+
+        plt.legend()
+        plt.tight_layout()
+
+        # Plot the ratio
+        plt.figure(figsize=(13, 7))
+
+        plt.semilogx(ells, phi_cls[2:] / theory_vals, lw=2, c='tab:blue', label=r'Ratio')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$C_{\ell}^{\textrm{Num}} / C_{\ell}^{\textrm{Th}} $')
+        plt.title(r'Ratio of the numerical to theoretical values for the simple $\phi$ mask')
+
+        plt.legend()
+        plt.tight_layout()
 
         plt.show()
 
@@ -1661,6 +1976,8 @@ class CambObject:
         area_per_pix = 1.49E8 / n_pix  # This is the total area in arcmin^2 divided by the number of pixels
         num_gal_per_pix = avg_gal_den * area_per_pix
         print('The average number of galaxies per pixel is {num:.3f}'.format(num=num_gal_per_pix))
+        print('The standard deviation of our shape noise per pixel is {num:.3f}'
+              .format(num=intrinsic_gal_ellip / np.sqrt(num_gal_per_pix)))
 
         # Generate a map which is just Gaussian random noise, with a mean of zero and st.dev. appropriate
         random_map1 = np.random.normal(loc=0, scale=intrinsic_gal_ellip / np.sqrt(num_gal_per_pix), size=n_pix)

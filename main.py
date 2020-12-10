@@ -99,8 +99,12 @@ if __name__ == '__main__':
 
     # non_linear.multiple_run_flask(3000)
 
-    non_linear.plot_multiple_run_data()
+    non_linear.plot_multiple_run_data(used_mask=True)
     non_linear.plot_ridge_plot()
+
+    non_linear.custom_mask()
+    non_linear.theta_phi_only_mask()
+    non_linear.experimenting_with_masks()
 
     # !non_linear.estimate_cl_from_alm()
     # ! non_linear.plot_map_to_alm_diff()
