@@ -66,6 +66,12 @@ Solar System to be another cylindrical band but one slightly thinner going from 
 > Do note that these are just arbitrary angles for both objects that I have plucked out of thin air based on the rough size
 > of the Euclid map above!
 
+It is important to ask why we need to mask out both these regions. For the Milky Way, we have many bright star sources
+which affects the quality of the signal, but importantly for both the Milky Way and the Solar System, there are large
+quantities of cosmic dust in both of these regions which attenuates the observed signal. This means that we will observe
+less galaxies in these regions, and so the data analysis becomes much harder to perform as we don't know what the "true"
+signal should be in these situations.
+
 Now that we have our two individual regions that we want to mask out, we need to combine these to form a single mask.
 To do so, we need to set up a HealPy `Rotator` object to rotate our Solar System mask from ecliptic to galactic coordinates.
 Now that we have both masks in a single coordinate system, we can combine them to form a new mask which only allows data
@@ -97,3 +103,76 @@ Nothing that the masked *Cl* values look like the original *Cl* values, just at 
 naive "correction" to the masked *Cl*s where we simply divide by the fraction of sky observed, which results in the orange
 line. We see that this basic correction seems to work remarkably well across all *l* values, subject to a bit of noise,
 which is very interesting to see.  
+
+Now that we have some recovered *Cl* values from our mask (with our basic correction in place), we can look at how these
+recovered values compare to the original, unmasked values. Here, we tale the ratio of the masked values with the unmasked
+values, to give the plot below.
+
+![Combined dummy mask](figures/investigating_masks/Ratio_of_converg_power.png)
+
+Here we see that the recovered *Cl* values are quite noisy, with respect to the original values, especially at low *l*.
+This somewhat dissipates at higher *l*, but still quite large differences.
+
+## Power spectra for an ensemble of masked maps
+
+Above, we have looked at the power spectrum for a single map that had a mask applied. To get more detailed information
+about how applying a mask changes the distribution of the *Cl* values obtained from a masked map, we need to repeat this
+process many times to build up an ensemble of masked maps, and then can compare summary statistics between the masked
+and unmasked distributions.
+
+### Mean, variance, skew, and kurtosis
+
+First, we look at how the first four moments of our *Cl* distribution change when we apply a mask. This is for data
+that has been collected for one thousand runs in each dataset.  
+Note that throughout this section we renormalise the recovered *Cl* values from the masked map by dividing by the fraction
+of sky let through.
+
+![Combined dummy mask](figures/investigating_masks/ensemble_avg/Average.png)
+
+Here we are plotting the deviation of the average of the recovered *Cl* values with respect to the input *Cl* values.
+Interestingly, we see that for *l* below a hundred, the masked *Cl*'s on average predict a slightly lower power spectrum,
+with this difference decreasing at larger *l*.
+
+![Combined dummy mask](figures/investigating_masks/ensemble_avg/Variance.png)
+
+Here we are plotting the variance of the recovered set of *Cl* values divided by the squared-average. We see that the
+masked values predict a systematically larger variance than the unmasked values, which follow the cosmic variance
+prediction almost exactly.
+
+![Combined dummy mask](figures/investigating_masks/ensemble_avg/Skew.png)
+![Combined dummy mask](figures/investigating_masks/ensemble_avg/Kurtosis.png)
+
+Here, we see that the skew and kurtosis statistics are generally much noisier than the mean or variance, but we see
+a general trend that the masked values predict a slightly larger value for both.
+
+We can try and get a better visualisation of the increased variance by producing KDE plots at each *l* for the two
+sets of values.
+
+![Combined dummy mask](figures/investigating_masks/ensemble_avg/Ridge_plot.png)
+
+### Looking at the covariance values
+
+Now that we have our set of masked *Cl* values, we can look at if using a mask introduces any correlation between the
+*Cl* values at different *l*. Previously, we have found that for unmasked maps, there is very little correlation between
+the *Cl* values, with a maximum correlation coefficient of |r| ~ 0.06. However, we can repeat the same analysis but now
+for our masked values, which gives:
+
+![Combined dummy mask](figures/investigating_masks/ensemble_avg/Covariance.png)
+
+Here, we see that there is a very interesting peak that lies on the diagonal between *l* and *l* - 2. Here, we see a strong
+positive correlation between these values that was not previously observed for the unmasked values.
+
+## Looking at *Cl* bleed between *l*'s for masked maps
+
+Above, we can see that for our masked maps, there seems to be a slight positive correlation between different *l* modes
+for our masked maps. We can investigate this further by creating maps where we start our with just a single *Cl* value
+non-zero, applying a mask and then recovering the *Cl* values from this.  
+To do this, we start off with two maps where all *Cl* values are zero, expect for *l* of 50 and 250. The maps for these
+to *Cl* values are shown below.
+
+![Combined dummy mask](figures/investigating_masks/Cl_bleed/Dummy_maps.png)
+
+Now that we have these two maps, we can apply the Euclid mask and recover what the power spectrum is for the masked
+maps, which is shown below.
+
+![Combined dummy mask](figures/investigating_masks/Cl_bleed/Recov_power_spec.png)
