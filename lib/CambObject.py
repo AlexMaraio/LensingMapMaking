@@ -100,6 +100,11 @@ class CambObject:
         self.my_cls = []
         self.my_cls_cpp = []
 
+        # Filepath for the mask used
+        self.mask_path = None
+        # Fraction of sky allowed through by the mask
+        self.mask_f_sky = None
+
     def set_dark_energy(self, w_0=-1, w_a=0):
         """
         Function to set the dark energy equation-of-state parameters. This includes the time evolution of the equation-
@@ -181,6 +186,40 @@ class CambObject:
 
         # Set the CAMB source windows parameters to the provided source windows
         self.params.SourceWindows = source_windows
+
+    def set_mask(self, mask_path):
+        """
+        Function to set the file path for the mask that we're interested in. Also sets the sky fraction attribute
+        using the provided mask
+
+        Args:
+            mask_path (str): File path for the mask that should be used
+
+        Returns:
+            None
+        """
+
+        # Convert the given path to an absolute path
+        mask_path = pathlib.Path(mask_path).expanduser().resolve()
+
+        # First check that the file exists
+        if not mask_path.is_file():
+            raise RuntimeError('The given path for the mask is not correct! Please check.')
+
+        # Set the class's mask path attribute
+        self.mask_path = mask_path
+
+        # Load in the mask as a set of bool values
+        print('Reading in provided mask now')
+        mask = hp.read_map(mask_path, verbose=False).astype(np.bool)
+
+        # Compute the fraction of sky let through by the mask
+        sky_fraction = mask.sum() / mask.size
+
+        print('Fraction of sky allowed through by the mask is {num:.2f} %'.format(num=100 * sky_fraction))
+
+        # Fraction of sky allowed through by the mask
+        self.mask_f_sky = sky_fraction
 
     def compute_c_ells(self):
         """
@@ -494,7 +533,13 @@ class CambObject:
 
         file.write('SELEC_SCALE: \t 1 \n')
         file.write('SELEC_TYPE: \t 0 \n')
-        file.write('STARMASK: \t 0 \n\n')  # TODO: change this when have a mask!
+
+        # Are we using a mask?
+        if self.mask_path is None:
+            file.write('STARMASK: \t 0 \n\n')
+        else:
+            # file.write('STARMASK: \t ../../resources/Euclid_masks/Euclid-gal-mask-2048.fits \n\n')
+            file.write('STARMASK: \t' + str(self.mask_path) + '\n\n')
 
         file.write('\n## Multipole information ##\n\n')
         file.write('EXTRAP_DIPOLE: \t 0 \n')
@@ -551,7 +596,7 @@ class CambObject:
         # These are the recovered alm & clm values that are computed from the above map. i.e. they contain are the
         # power spectrum of the raw field values that has noise only due to cosmic variance.
         file.write('RECOVALM_OUT: \t 0 \n')
-        file.write('RECOVCLS_OUT: \t Output-Cl.dat \n')
+        file.write('RECOVCLS_OUT: \t Unmasked_Cls.dat \n')
 
         # Here, we have the shear values output the convergence and shear values at each redshift bin of the lensing
         # field, but with noise only due to cosmic variance, NOT due to the mask or Poisson galaxy sampling.
