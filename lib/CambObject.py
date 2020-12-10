@@ -4,10 +4,13 @@ import random
 import pathlib
 import time
 import ctypes
+import mpmath
 import numpy as np
 from scipy import stats as scistats
 from scipy import constants as sciconst
+from scipy import special as scispec
 import pandas as pd
+import functools
 import camb
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -19,6 +22,8 @@ from .Planck_colourmap import make_planck_colour_map
 
 
 sns.set(font_scale=1.75, rc={'text.usetex': True})
+
+num_ell = 1
 
 
 class CambObject:
