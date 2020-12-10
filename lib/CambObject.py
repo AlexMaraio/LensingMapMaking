@@ -673,7 +673,7 @@ class CambObject:
 
             raise RuntimeError('Flask did not run successfully! :(')
 
-    def multiple_run_flask(self, num_runs):
+    def multiple_run_flask(self, num_runs, use_mask=False):
         """
         Function that runs Flask code multiple times to compute an average of the Cl values
 
@@ -691,14 +691,21 @@ class CambObject:
         raw_data_dfs = []
         data_dfs = []
 
+        # If we are using a mask, then initiate lists that store the masked Cl values
+        if use_mask:
+            masked_raw_data_dfs = []
+            masked_data_dfs = []
+
         # Run Flask the given number of times to generate a power spectra each time
         for run_num in range(num_runs):
             self.run_flask(use_rnd=True)
 
             # TODO: change these labels to deal with galaxy counts too!
             # Read in the new power spectrum
-            cl_df = pd.read_csv(self.folder_path + 'Output-Cl.dat', header=None,
-                                names=['ell', 'Cl-f1z1f1z1', 'Cl-f1z1f1z2', 'Cl-f1z2f1z2'], sep=r'\s+', skiprows=1)
+            cl_df = pd.read_csv(self.folder_path + 'Output-Cl.dat', sep=r'\s+')
+
+            field_num = 2 if self.galaxy_dens else 1
+            column = 'Cl-f' + str(field_num) + 'z2' + 'f' + str(field_num) + 'z2'
 
             # Strip any spaces out of the column names
             cl_df.columns = cl_df.columns.str.lstrip()
@@ -707,10 +714,10 @@ class CambObject:
             ells = cl_df['ell'].to_numpy()
 
             # Create a new data-frame that stores the raw Cl values (i.e. without ell(ell+1) normalisation)
-            raw_cl_df = pd.DataFrame({'Cl': cl_df['Cl-f1z2f1z2'].to_numpy()}, index=ells)
+            raw_cl_df = pd.DataFrame({'Cl': cl_df[column].to_numpy()}, index=ells)
 
             # Get the c_ell values normalised by ell(ell+1)/2pi, as usual
-            c_ells = cl_df['Cl-f1z2f1z2'].to_numpy() * self.ells * (self.ells + 1) / (2 * np.pi)
+            c_ells = cl_df[column].to_numpy() * self.ells * (self.ells + 1) / (2 * np.pi)
 
             # Create a new dummy dataframe with out C_ell values, with an index determined by the ell values
             cl_df = pd.DataFrame({'Cl': c_ells}, index=ells)
@@ -719,9 +726,39 @@ class CambObject:
             raw_data_dfs.append(raw_cl_df.transpose())
             data_dfs.append(cl_df.transpose())
 
+            # If using a mask, read in the masked data too
+            if use_mask:
+                masked_cl_df = pd.read_csv(self.folder_path + 'Masked_Converg_Cls.dat', sep=r'\s+')
+
+                # Strip any spaces out of the column names
+                masked_cl_df.columns = masked_cl_df.columns.str.lstrip()
+
+                # Get the ell values as a numpy array
+                ells = masked_cl_df['ell'].to_numpy()
+
+                # Normalise the masked Cl values by dividing by the sky fraction
+                masked_cl_df[column] /= self.mask_f_sky
+
+                # Create a new data-frame that stores the raw Cl values (i.e. without ell(ell+1) normalisation)
+                masked_raw_cl_df = pd.DataFrame({'Cl': masked_cl_df[column].to_numpy()}, index=ells)
+
+                # Get the c_ell values normalised by ell(ell+1)/2pi, as usual
+                c_ells = masked_cl_df[column].to_numpy() * self.ells * (self.ells + 1) / (2 * np.pi)
+
+                # Create a new dummy dataframe with out C_ell values, with an index determined by the ell values
+                masked_cl_df = pd.DataFrame({'Cl': c_ells}, index=ells)
+
+                # Append the transpose of the current data-frames to the lists
+                masked_raw_data_dfs.append(masked_raw_cl_df.transpose())
+                masked_data_dfs.append(masked_cl_df.transpose())
+
         # Concatenate the all the data frames together into a single output data frame, for both data-sets
         raw_data_df = pd.concat(raw_data_dfs, ignore_index=True)
         data_df = pd.concat(data_dfs, ignore_index=True)
+
+        if use_mask:
+            masked_raw_data_df = pd.concat(masked_raw_data_dfs, ignore_index=True)
+            masked_data_df = pd.concat(masked_data_dfs, ignore_index=True)
 
         # Prints timing statistics
         print('The total time for the runs was {num:.3f} seconds, with an average of {numpersec:.3f} seconds/run'
@@ -731,19 +768,27 @@ class CambObject:
         raw_data_df.to_csv(self.folder_path + 'AggregateRawCls.csv', index=False)
         data_df.to_csv(self.folder_path + 'AggregateCls.csv', index=False)
 
-        # Hand off to the plotting function which plots the output data
-        self.plot_multiple_run_data()
+        if use_mask:
+            masked_raw_data_df.to_csv(self.folder_path + 'AggregateRawMaskedCls.csv', index=False)
+            masked_data_df.to_csv(self.folder_path + 'AggregateMaskedCls.csv', index=False)
 
-    def plot_multiple_run_data(self):
+        # Hand off to the plotting function which plots the output data
+        self.plot_multiple_run_data(used_mask=use_mask)
+
+    def plot_multiple_run_data(self, used_mask=False):
         """
         Function that plots data that has been calculated for multiple runs of Flask
+
+        Args:
+            used_mask (bool): Bool value to determine if a mask was used then computing the Cl coefficients,
+            and so to plot the distribution of the masked Cl values too
 
         Returns:
             None
         """
         # Import the previously saved data
-        data_df = pd.read_csv(self.folder_path + 'AggregateRawCls.csv')
-        data_df_kde = pd.read_csv(self.folder_path + 'AggregateCls4.csv')
+        data_df = pd.read_csv(self.folder_path + 'AggregateCls.csv')
+        data_df_kde = pd.read_csv(self.folder_path + 'AggregateCls.csv')
 
         print('Total number of samples here is: ' + str(len(data_df)))
 
@@ -779,6 +824,31 @@ class CambObject:
             skew_cls2.append(scistats.moment(np.array(c_ells), moment=3) / (exp_var ** (3 / 2)))
             kurt_cls2.append((scistats.moment(np.array(c_ells), moment=4) / (exp_var ** 2)) - 3)
 
+        # If want to plot masked data as well, then read it in now
+        if used_mask:
+            masked_data_df = pd.read_csv(self.folder_path + 'AggregateMaskedCls.csv')
+            masked_data_df_kde = pd.read_csv(self.folder_path + 'AggregateMaskedCls.csv')
+
+            print('Total number of samples in masked DataFrame is: ' + str(len(masked_data_df)))
+
+            mean_cls_2 = []
+            var_cls_2 = []
+
+            skew_cls_2 = []
+            kurt_cls_2 = []
+
+            for label, c_ells in masked_data_df.items():
+                # Calculate the mean and append it to our list
+                mean_val = np.mean(c_ells)
+                mean_cls_2.append(np.mean(c_ells))
+
+                # Calculate the variance, normalise it through the mean value squared, and append it to our list
+                var_cls_2.append(np.var(c_ells) / (mean_val * mean_val))
+
+                # Also calculate the skew and kurtosis and append them to the lists too
+                skew_cls_2.append(scistats.skew(np.array(c_ells), bias=True))
+                kurt_cls_2.append(scistats.kurtosis(np.array(c_ells), bias=True))
+
         # Get the keys of the data frame
         keys = data_df.keys()
 
@@ -788,7 +858,7 @@ class CambObject:
         covariance_data = {'x': [], 'y': [], 'raw_C': [], 'norm_C': []}
 
         # Go through each Cl combination and work out the Pearson correlation coefficient
-        for ell1, c_ells1 in data_df.items():
+        for ell1, c_ells1 in masked_data_df.items():
             # Only go up to ell1 of 125, otherwise figure too crowded
             if int(ell1) > 126:
                 continue
@@ -809,10 +879,14 @@ class CambObject:
                 # * Now manually compute the covariance matrix
 
                 val = 0
+
+                # The column in the c_ells dictionary that has lensing information stored in it
+                camb_col = 'W4xW4' if self.galaxy_dens else 'W2xW2'
+
                 # Go through each ell1 and ell2 list and compute the sum at that point
                 for val1, val2 in zip(c_ells1.to_numpy(), c_ells2.to_numpy()):
-                    val += (val1 - self.raw_c_ells['W2xW2'][int(ell1)]) * \
-                           (val2 - self.raw_c_ells['W2xW2'][int(ell2)])
+                    val += (val1 - self.c_ells[camb_col][int(ell1)]) * \
+                           (val2 - self.c_ells[camb_col][int(ell2)])
 
                 # Normalise the sum to the number of data points
                 val /= len(c_ells1)
@@ -823,8 +897,8 @@ class CambObject:
                 covariance_data['raw_C'].append(val)
 
                 # Now normalise through the intrinsic standard deviation at each ell value
-                val /= self.raw_c_ells['W2xW2'][int(ell1)] * np.sqrt(2 / (2 * int(ell1) + 1))
-                val /= self.raw_c_ells['W2xW2'][int(ell2)] * np.sqrt(2 / (2 * int(ell2) + 1))
+                val /= self.c_ells[camb_col][int(ell1)] * np.sqrt(2 / (2 * int(ell1) + 1))
+                val /= self.c_ells[camb_col][int(ell2)] * np.sqrt(2 / (2 * int(ell2) + 1))
 
                 # Store that in the dictionary too
                 covariance_data['norm_C'].append(val)
@@ -864,7 +938,7 @@ class CambObject:
                              cbar_kws={'label': r'Covariance matrix $C_{ij} / \sigma_i \sigma_j$'})
             ax.set_xlabel(r'$\ell_i$')
             ax.set_ylabel(r'$\ell_j$')
-            ax.set_title('Normalised covariance matrix')
+            ax.set_title('Normalised covariance matrix for masked convergence')
             plt.tight_layout()
 
             plt.show()
@@ -873,19 +947,37 @@ class CambObject:
         for idx in range(len(keys)):
             data_df_kde[data_df_kde.keys()[idx]] = (data_df_kde[data_df_kde.keys()[idx]] * 1E7)
 
-        grid2 = sns.PairGrid(data_df_kde, vars=[keys[0], keys[2], keys[8], keys[23], keys[98], keys[498], keys[1498]])
+        grid2 = sns.PairGrid(data_df_kde, vars=[keys[0], keys[2], keys[5], keys[10], keys[15], keys[25], keys[50]])
         grid2.map_diag(sns.histplot)
         grid2.map_lower(sns.kdeplot, shade=True, levels=4)
         grid2.map_upper(sns.histplot)
         grid2.tight_layout()
         plt.show(block=False)
 
+        # Also plot the masked KDE plot, if we used one
+        if used_mask:
+            # Also make all values order unity by multiplying
+            for idx in range(len(keys)):
+                masked_data_df_kde[masked_data_df_kde.keys()[idx]] = \
+                    (masked_data_df_kde[masked_data_df_kde.keys()[idx]] * 1E7)
+
+            grid2 = sns.PairGrid(masked_data_df_kde,
+                                 vars=[keys[0], keys[2], keys[5], keys[10], keys[15], keys[25], keys[50]])
+            grid2.map_diag(sns.histplot)
+            grid2.map_lower(sns.kdeplot, shade=True, levels=4)
+            grid2.map_upper(sns.histplot)
+            grid2.tight_layout()
+            plt.show(block=False)
+
         # * Print the raw data for each Cl dataset - very messy but gets the point across
         plt.figure(figsize=(13, 7))
         for cl in data_df.itertuples(index=False):
             plt.loglog(self.ells, cl, alpha=0.5, linewidth=0.75)
 
-        plt.loglog(self.ells, mean_cls, lw=2, color='blue', label=r'Average $C_\ell$')
+        plt.loglog(self.ells, mean_cls, lw=2, color='tab:blue', label=r'Average $C_\ell$')
+        if used_mask:
+            plt.loglog(self.ells, mean_cls_2, lw=2, color='hotpink', label=r'Average masked $C_\ell$')
+        plt.loglog(self.ells, self.c_ells['W4xW4'][2:], lw=1, color='tab:cyan', label=r'CAMB $C_\ell$')
 
         plt.xlabel(r'$\ell$')
         plt.ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
@@ -894,21 +986,29 @@ class CambObject:
         plt.tight_layout()
 
         # * Plot the deviation of the mean_cls vs input cls from CAMB
+        camb_col = 'W4xW4' if self.galaxy_dens else 'W2xW2'
+
         plt.figure(figsize=(13, 7))
-        plt.semilogx(self.ells, (np.array(mean_cls) / self.raw_c_ells['W2xW2'][2:]) - 1, lw=2, color='purple')
+        plt.semilogx(self.ells, (np.array(mean_cls) / self.c_ells[camb_col][2:]) - 1, lw=2, color='tab:blue',
+                     label=r'Unmasked $C_\ell$')
+        if used_mask:
+            plt.semilogx(self.ells, (np.array(mean_cls_2) / self.c_ells[camb_col][2:]) - 1, lw=2, color='hotpink',
+                         label=r'Masked $C_\ell$')
 
         plt.title(r'Deviation of the average $C_\ell$ with respect to the input $C_\ell$ values')
         plt.xlabel(r'$\ell$')
         plt.ylabel(r'$ (C_\ell^\textrm{Avg} - C_\ell^\textrm{In} ) / C_\ell^\textrm{In} $')
 
+        plt.legend()
         plt.tight_layout()
 
         # Also plot the skew
         plt.figure(figsize=(13, 7))
 
         # Plot the skew
-        plt.semilogx(self.ells, skew_cls, lw=1, color='b', label='Fully numerical')
-        plt.semilogx(self.ells, skew_cls2, lw=1, color='k', label='With theory variance')
+        plt.semilogx(self.ells, skew_cls, lw=1, color='tab:blue', label=r'Full $C_\ell$')
+        if used_mask:
+            plt.semilogx(self.ells, skew_cls_2, lw=1, color='hotpink', label=r'Masked $C_\ell$')
 
         # Plot the expected skew for a Gamma distribution
         k = (2 * self.ells + 1) / 2
@@ -921,8 +1021,10 @@ class CambObject:
 
         # And kurtosis
         plt.figure(figsize=(13, 7))
-        plt.semilogx(self.ells, kurt_cls, lw=1, color='b', label='Fully numerical')
-        plt.semilogx(self.ells, kurt_cls2, lw=1, color='k', label='With theory variance')
+        plt.semilogx(self.ells, kurt_cls, lw=1, color='tab:blue', label=r'Full $C_\ell$')
+        if used_mask:
+            plt.semilogx(self.ells, kurt_cls_2, lw=1, color='hotpink', label=r'Masked $C_\ell$')
+
         plt.semilogx(self.ells, 6 / k, color='purple', lw=2, label=r'$\Gamma$ function prediction')
         plt.title('Kurtosis')
         plt.xlabel(r'$\ell$')
@@ -931,13 +1033,20 @@ class CambObject:
 
         # Now plot the variance of the Cl's with the expected values from the Cosmic variance
         plt.figure(figsize=(13, 7))
-        plt.loglog(self.ells, var_cls, lw=2, color='purple', label='Data')
-        plt.loglog(self.ells, 2 / (2 * self.ells + 1), color='blue', label='Cosmic variance')
+        plt.loglog(self.ells, var_cls, lw=1, color='tab:blue', label=r'Full $C_\ell$')
+        if used_mask:
+            plt.loglog(self.ells, var_cls_2, lw=1, color='hotpink', label=r'Masked $C_\ell$')
+
+        plt.loglog(self.ells, 2 / (2 * self.ells + 1), lw=2, color='purple', label='Cosmic variance')
         plt.xlabel(r'$\ell$')
         plt.ylabel(r'$\textrm{Var}[C_\ell] / \textrm{Avg}[C_\ell]^2$')
+        plt.title('Variance divided by the squared-average for the masked and unmasked convergence field')
+
         plt.legend()
         plt.tight_layout()
         plt.show()
+
+        return
 
         # * Code that computes the ks-test to see if our Cl distributions *are* statistically Gaussian or Gamma-func
 
@@ -974,11 +1083,15 @@ class CambObject:
         """
 
         # Read in the data to a Pandas DataFrame
-        data_df = pd.read_csv(self.folder_path + 'AggregateCls1.csv')
+        data_df = pd.read_csv(self.folder_path + 'AggregateCls.csv')
+        masked_data_df = pd.read_csv(self.folder_path + 'AggregateMaskedCls.csv')
 
         # Normalise each value by 1E7 to get working KDE plots
         for idx in range(len(data_df.keys())):
             data_df[data_df.keys()[idx]] = (data_df[data_df.keys()[idx]] * 1E7)
+
+        for idx in range(len(masked_data_df.keys())):
+            masked_data_df[masked_data_df.keys()[idx]] = (masked_data_df[masked_data_df.keys()[idx]] * 1E7)
 
         data_frames = []
 
@@ -987,7 +1100,15 @@ class CambObject:
             # Subject to the condition where ell <= 25
             if int(label) > 25:
                 continue
-            tmp_df = pd.DataFrame({'ell': label, 'Cl': (c_ells - np.mean(c_ells)) / np.mean(c_ells)})
+            tmp_df = pd.DataFrame(
+                    {'ell': label, 'Cl': (c_ells - np.mean(c_ells)) / np.mean(c_ells), 'Type': 'Unmasked'})
+            data_frames.append(tmp_df)
+
+        for label, c_ells in masked_data_df.items():
+            # Subject to the condition where ell <= 25
+            if int(label) > 25:
+                continue
+            tmp_df = pd.DataFrame({'ell': label, 'Cl': (c_ells - np.mean(c_ells)) / np.mean(c_ells), 'Type': 'Masked'})
             data_frames.append(tmp_df)
 
         data = pd.concat(data_frames, ignore_index=True)
@@ -996,22 +1117,30 @@ class CambObject:
         sns.set_theme(style="white", rc={"axes.facecolor": (0, 0, 0, 0)})
 
         # Create the colour map for our ell values
-        pal = sns.cubehelix_palette(len(data_frames), rot=-0.2, light=0.75, dark=0.05, gamma=1.25)
+        # pal = sns.cubehelix_palette(len(data_frames), rot=-0.2, light=0.75, dark=0.05, gamma=1.25)
+        pal = sns.cubehelix_palette(2, rot=-0.2, light=0.85, dark=0.25, gamma=1.25)
 
         # Initialize the FacetGrid object
-        g = sns.FacetGrid(data, row="ell", hue="ell", aspect=20, height=0.5, palette=pal)
+        g = sns.FacetGrid(data, row="ell", hue="Type", aspect=20, height=0.5, palette=pal)
 
         # Draw the densities in a few steps
-        g.map(sns.kdeplot, "Cl", bw_adjust=0.5, clip_on=False, fill=True, alpha=1, linewidth=1.5)
-        g.map(sns.kdeplot, "Cl", clip_on=False, color="w", lw=2, bw_adjust=0.5)
+        g.map(sns.kdeplot, "Cl", bw_adjust=0.5, clip_on=False, fill=True, alpha=0.6, linewidth=2)
+        # ? g.map(sns.kdeplot, "Cl", clip_on=False, color="w", lw=2, bw_adjust=0.5)
         g.map(plt.axhline, y=0, lw=2, clip_on=False)
+        # g.map(plt.axhline, y=0, xmin=-0.75, xmax=0.75,  lw=2, clip_on=False)
         g.map(plt.axvline, x=0, linestyle='--', color='w', lw=1, alpha=0.8, clip_on=False)
 
         # Define and use a simple function to label the plot in axes coordinates
         def label_func(x, color, label):
             ax = plt.gca()
-            ax.text(0, .2, label, fontweight="bold", color=color,
-                    ha="left", va="center", transform=ax.transAxes)
+
+            global num_ell
+            num_ell += 0.5
+            label = num_ell
+
+            if label == int(label):
+                ax.text(0, .2, int(label), fontweight="bold", color=color,
+                        ha="left", va="center", transform=ax.transAxes)
 
         g.map(label_func, "Cl")
 
@@ -1032,7 +1161,7 @@ class CambObject:
             ax.plot(x, scistats.norm.pdf(x, loc=0, scale=np.sqrt(var)), lw=2, color='tab:green')
 
         # Map the above function to the Cl data
-        g.map(plot_gamma, "Cl")
+        # g.map(plot_gamma, "Cl")
 
         # Set the subplots to overlap
         g.fig.subplots_adjust(hspace=-0.45)
@@ -1041,12 +1170,14 @@ class CambObject:
         g.fig.subplots_adjust(top=0.995)
         g.fig.suptitle(r'Distribution of the $C_\ell$ values', fontsize=18)
         plt.xlabel(r'$[C_\ell - \bar{C}_\ell] / \bar{C}_\ell$', fontsize=16)
-        plt.xlim(left=-1, right=1)
+        g.set(xlim=(-1, 1))
 
         # Remove axes details that don't play well with overlap
         g.set_titles("")
         g.set(yticks=[])
         g.despine(bottom=True, left=True)
+
+        g.add_legend(fontsize='large')
         plt.show()
 
     @staticmethod
