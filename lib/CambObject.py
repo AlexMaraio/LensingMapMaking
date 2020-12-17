@@ -445,7 +445,7 @@ class CambObject:
         z_0 = z_m / np.sqrt(2)
 
         # Return expected density
-        return mean_dens * (z / z_0) ** 2 * np.exp(-(z / z_0) ** (3 / 2))
+        return 3 / (2 * z_0) * (z / z_0) ** 2 * np.exp(-(z / z_0) ** (3 / 2))
 
     def write_exp_gal_dist(self, **kwargs):
         """
@@ -869,7 +869,7 @@ class CambObject:
                 continue
 
             # Only want to compute samples where ell2 < ell1
-            for ell2, c_ells2 in data_df.items():
+            for ell2, c_ells2 in masked_data_df.items():
                 if int(ell2) >= int(ell1):
                     continue
 
@@ -939,7 +939,7 @@ class CambObject:
             plt.tight_layout()
 
             plt.figure(figsize=(9, 8))
-            ax = sns.heatmap(data=norm_covariance_df, square=True, cmap="jet",
+            ax = sns.heatmap(data=norm_covariance_df, square=True, cmap="seismic", center=0,
                              cbar_kws={'label': r'Covariance matrix $C_{ij} / \sigma_i \sigma_j$'})
             ax.set_xlabel(r'$\ell_i$')
             ax.set_ylabel(r'$\ell_j$')
@@ -1339,8 +1339,8 @@ class CambObject:
         for z_bin in range(1, self.num_redshift_bins + 1):
             # Read in the generated shear map with noise from Flask
             converg_w_noise = hp.read_map(
-                self.folder_path + 'Output-poisson-map-f' + str(field_num) + 'z' + str(z_bin) + '.fits',
-                verbose=False, field=None)
+                    self.folder_path + 'Output-poisson-map-f' + str(field_num) + 'z' + str(z_bin) + '.fits',
+                    verbose=False, field=None)
 
             ellip_w_noise = hp.read_map(
                     self.folder_path + 'Output-Ellip-map-f' + str(1) + 'z' + str(z_bin) + '.fits',
@@ -1704,7 +1704,7 @@ class CambObject:
         ell1 = 50
         ell2 = 250
 
-        # Set up two dummy sets of Cl values that are zero, except for a signle ell mode
+        # Set up two dummy sets of Cl values that are zero, except for a single ell mode
         dummy_cls1 = np.zeros(self.ell_max + 1)
         dummy_cls1[ell1] = 1
 
