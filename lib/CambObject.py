@@ -780,6 +780,295 @@ class CambObject:
         # Hand off to the plotting function which plots the output data
         self.plot_multiple_run_data(used_mask=use_mask)
 
+    def multiple_run_flask_with_masks(self, num_runs):
+        """
+        Custom function that runs Flask many times, applying ten different masks to the convergence maps to see how
+        changing f_sky affects the recovered data
+
+        Args:
+            num_runs (int): The number of times that Flask should be run
+
+        Returns:
+            None
+        """
+
+        # Time how long the total runs took
+        start_time = time.time()
+
+        # Dictionary of indexed by different mask numbers that we will store our the unmasked and masked data into
+        data_dfs = {'Mask11': [], 'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                    'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+        # Here, 'Mask11' refers to the unmasked values
+
+        # Run Flask the given number of times to generate a power spectra each time
+        for run_num in range(num_runs):
+            self.run_flask(use_rnd=True)
+
+            for mask_num in range(1, 12):
+                cl_df = pd.read_csv(self.folder_path + 'MaskedOutput/' + 'MaskedCls' + str(mask_num) + '.dat',
+                                    sep=r'\s+')
+
+                cl_df.columns = cl_df.columns.str.lstrip()
+
+                # Get the ell values as a numpy array
+                ells = cl_df['ell'].to_numpy()
+
+                # Get the c_ell values normalised by ell(ell+1)/2pi, as usual
+                # Also normalise by 1 / f_sky for the specific mask in question
+                c_ells = cl_df['Cl-f2z2f2z2'].to_numpy() * ells * (ells + 1) / (2 * np.pi) / self.masks_f_sky[
+                    mask_num - 1]
+
+                # Create a new dummy dataframe with out C_ell values, with an index determined by the ell values
+                cl_df = pd.DataFrame({'Cl': c_ells}, index=ells)
+
+                data_dfs['Mask' + str(mask_num)].append(cl_df.transpose())
+
+        # Save results for each mask separately
+        for mask_num in range(1, 12):
+            data_dfs['Mask' + str(mask_num)] = pd.concat(data_dfs['Mask' + str(mask_num)], ignore_index=True)
+            data_dfs['Mask' + str(mask_num)].to_csv(self.folder_path + 'AggregateCls_Mask' + str(mask_num) + '_2.csv',
+                                                    index=False)
+
+        # Prints timing statistics
+        print('The total time for the runs was {num:.3f} seconds, with an average of {numpersec:.3f} seconds/run'
+              .format(num=time.time() - start_time, numpersec=(time.time() - start_time) / num_runs))
+
+    def plot_multiple_run_flask_with_masks(self):
+        """
+        Function to plot the data that has been obtained above for many different masks
+
+        Returns:
+            None
+        """
+        def moving_average(x, length):
+            """
+            Function that calculates the moving average of a given dataset
+
+            Args:
+                x (array): Input array of data
+                length (int): The number of points to average over at each point
+
+            Returns:
+                array
+            """
+            return np.convolve(x, np.ones(length), 'valid') / length
+
+        mean_cls = {'Mask11': [], 'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                    'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+
+        mean_cls_avg = {'Mask11': [], 'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                        'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+
+        var_cls = {'Mask11': [], 'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                   'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+
+        var2_cls = {'Mask11': [], 'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                    'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+
+        skew_cls = {'Mask11': [], 'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                    'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+
+        kurt_cls = {'Mask11': [], 'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                    'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+
+        skew_cls_avg = {'Mask11': [], 'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                        'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+
+        kurt_cls_avg = {'Mask11': [], 'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                        'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+
+        # List that will hold the signal-to-noise values
+        stns = []
+
+        # Go through each mask and read in the data
+        for mask_num in range(1, 12):
+
+            mask_key = 'Mask' + str(mask_num)
+
+            data_df1 = pd.read_csv(self.folder_path + 'AggregateRawCls_Mask' + str(mask_num) + '.csv')
+            data_df2 = pd.read_csv(self.folder_path + 'AggregateCls_Mask' + str(mask_num) + '_2.csv')
+
+            data_df = pd.concat([data_df1, data_df2], ignore_index=True)
+
+            for label, c_ells in data_df.items():
+                mean_val = np.mean(c_ells)
+
+                # Compute mean
+                mean_cls[mask_key].append(mean_val)
+
+                # Compute variance
+                var_cls[mask_key].append(np.var(c_ells) / (mean_val * mean_val))
+                var2_cls[mask_key].append(np.var(c_ells))
+
+                # Compute skew and kurtosis
+                skew_cls[mask_key].append(scistats.skew(np.array(c_ells), bias=True))
+                kurt_cls[mask_key].append(scistats.kurtosis(np.array(c_ells), bias=True))
+
+            # Compute the moving average of the means, skew, and kurtosis using three data points at each point
+            mean_cls_avg[mask_key] = moving_average(mean_cls[mask_key] / self.c_ells['W4xW4'][2:] - 1, 3)
+            skew_cls_avg[mask_key] = moving_average(skew_cls[mask_key], 3)
+            kurt_cls_avg[mask_key] = moving_average(kurt_cls[mask_key], 3)
+
+            # * Now want to estimate the signal-to-noise ratio of each map
+            # To do so, we first need to evaluate the covariance matrix for each map
+
+            # First, convert our input/"true" Cl's from CAMB and turn them into a NumPy array
+            true = np.array(self.c_ells['W4xW4'][2:])
+
+            # Range of ell values considered
+            ells = np.arange(2, self.ell_max + 1)
+
+            # The signal-to-noise is defined as the sum over all l of the Cl^2 divided by the covariance matrix at
+            # (l, l), in our very basic approximation!
+            stn = np.sum((np.mean(data_df).to_numpy()) ** 2 / (true ** 2 / (2 * ells + 1)))
+
+            stns.append(stn)
+
+        # Plot the signal-to-noise as a function of f_sky
+        plt.figure(figsize=(13, 7))
+        plt.semilogx(self.masks_f_sky, stns, 'bo')
+
+        plt.xlabel(r'$f_\textrm{sky}$')
+        plt.ylabel(r'$\left[\frac{\textsc{s}}{\textsc{n}} \right]^2$')
+        plt.title('A simple signal-to-noise calculation')
+        plt.tight_layout()
+        plt.show()
+
+        norm = mpl.colors.Normalize(vmin=0, vmax=1)
+        cmap = mpl.cm.ScalarMappable(norm=norm, cmap='plasma')
+        cmap.set_array([])
+
+        fig1, ax1 = plt.subplots(figsize=(13, 7))
+
+        for mask_num in range(1, 12):
+            ax1.loglog(self.ells, mean_cls['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.loglog(self.ells, self.c_ells['W4xW4'][2:], ls='--', lw=3, color='cyan', label=r'CAMB $C_\ell$')
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig1.tight_layout()
+
+        # * Plot of the variance divided by the average^2 Cl
+        fig2, ax2 = plt.subplots(figsize=(13, 7))
+        for mask_num in range(1, 12):
+            ax2.loglog(self.ells, var_cls['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax2.loglog(self.ells, 2 / (2 * self.ells + 1), ls='--', lw=3, color='cyan', label='Cosmic variance')
+
+        ax2.set_xlabel(r'$\ell$')
+        ax2.set_ylabel(r'$\textrm{Var}[C_\ell] / \textrm{Avg}[C_\ell]^2$')
+        fig2.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig2.tight_layout()
+
+        # * Plot of the variance of the Cl's divided by the Gamma-function prediction
+        fig3, ax3 = plt.subplots(figsize=(13, 7))
+        for mask_num in range(1, 12):
+            ax3.loglog(self.ells, np.array(var_cls['Mask' + str(mask_num)]) / (2 / (2 * self.ells + 1)), lw=2,
+                       label=r'Mask num ' + str(mask_num), c=cmap.to_rgba(self.masks_f_sky[mask_num - 1], alpha=0.8))
+
+        ax3.set_xlabel(r'$\ell$')
+        ax3.set_ylabel(r'$(\textrm{Var}[C_\ell] / \textrm{Avg}[C_\ell]^2) / \Gamma$-function prediction')
+        fig3.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig3.tight_layout()
+
+        # * Plot of the raw variance of the Cl's
+        fig3, ax3 = plt.subplots(figsize=(13, 7))
+        for mask_num in range(1, 12):
+            ax3.loglog(self.ells, var2_cls['Mask' + str(mask_num)], lw=2,
+                       label=r'Mask num ' + str(mask_num), c=cmap.to_rgba(self.masks_f_sky[mask_num - 1], alpha=0.8))
+
+        ax3.set_xlabel(r'$\ell$')
+        ax3.set_ylabel(r'$\textrm{Var}[C_\ell]$')
+        fig3.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig3.tight_layout()
+
+        # * Plot of the relative difference between the average Cl and input values
+        fig3, ax3 = plt.subplots(figsize=(13, 7))
+        for mask_num in range(1, 12):
+            ax3.semilogx(self.ells, np.array(mean_cls['Mask' + str(mask_num)]) / self.c_ells['W4xW4'][2:] - 1,
+                         lw=2, label=r'Mask num ' + str(mask_num),
+                         c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax3.set_xlabel(r'$\ell$')
+        ax3.set_ylabel(r'$C_\ell / C_\ell^\textrm{In} - 1$')
+        plt.yscale('symlog', linthreshy=0.0075)
+        ax3.set_title(r'Relative difference between average recovered $C_\ell$ and input values')
+        fig3.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig3.tight_layout()
+
+        # * Plot of the moving average of the relative difference
+        fig3, ax3 = plt.subplots(figsize=(13, 7))
+        for mask_num in range(1, 12):
+            ax3.semilogx(self.ells[1:-1], mean_cls_avg['Mask' + str(mask_num)],
+                         lw=2, label=r'Mask num ' + str(mask_num),
+                         c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax3.set_xlabel(r'$\ell$')
+        ax3.set_ylabel(r'Rolling average of $C_\ell / C_\ell^\textrm{In} - 1$')
+        plt.yscale('symlog', linthreshy=0.0075)
+        ax3.set_title(r'Relative difference between average recovered $C_\ell$ and input values')
+        fig3.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig3.tight_layout()
+
+        # * Plot of the skew
+        fig4, ax4 = plt.subplots(figsize=(13, 7))
+        for mask_num in range(1, 12):
+            ax4.semilogx(self.ells, skew_cls['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                         c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        k = (2 * self.ells + 1) / 2
+        ax4.semilogx(self.ells, 2 / np.sqrt(k), color='cyan', ls='--', lw=3, label=r'$\Gamma$ function prediction')
+
+        ax4.set_xlabel(r'$\ell$')
+        ax4.set_ylabel(r'Skew')
+        fig4.colorbar(cmap, label=r'$f_\textrm{sky}$')
+
+        # * Plot of the rolling average of the skew
+        fig4, ax4 = plt.subplots(figsize=(13, 7))
+        for mask_num in range(1, 12):
+            ax4.semilogx(self.ells[1:-1], skew_cls_avg['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                         c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        k = (2 * self.ells + 1) / 2
+        ax4.semilogx(self.ells, 2 / np.sqrt(k), color='cyan', ls='--', lw=3, label=r'$\Gamma$ function prediction')
+
+        ax4.set_xlabel(r'$\ell$')
+        ax4.set_ylabel(r'Rolling average of skew')
+        fig4.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig4.tight_layout()
+
+        # * Plot of the kurtosis
+        fig5, ax5 = plt.subplots(figsize=(13, 7))
+        for mask_num in range(1, 12):
+            ax5.semilogx(self.ells, kurt_cls['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                         c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        plt.semilogx(self.ells, 6 / k, color='cyan', ls='--', lw=3, label=r'$\Gamma$ function prediction')
+
+        ax5.set_xlabel(r'$\ell$')
+        ax5.set_ylabel(r'Excess kurtosis')
+        fig5.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig5.tight_layout()
+
+        # * Plot of the moving average of the kurtosis
+        fig5, ax5 = plt.subplots(figsize=(13, 7))
+        for mask_num in range(1, 12):
+            ax5.semilogx(self.ells[1:-1], kurt_cls_avg['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                         c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        plt.semilogx(self.ells, 6 / k, color='cyan', ls='--', lw=3, label=r'$\Gamma$ function prediction')
+
+        ax5.set_xlabel(r'$\ell$')
+        ax5.set_ylabel(r'Rolling averaged excess kurtosis')
+        fig5.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig5.tight_layout()
+
+        plt.show()
+
     def plot_multiple_run_data(self, used_mask=False):
         """
         Function that plots data that has been calculated for multiple runs of Flask
