@@ -6,13 +6,16 @@ import time
 import ctypes
 import mpmath
 import numpy as np
+from camb.sources import GaussianSourceWindow
 from scipy import stats as scistats
 from scipy import constants as sciconst
 from scipy import special as scispec
+from scipy import interpolate as sciinterp
 import pandas as pd
 import functools
 import camb
 import healpy as hp
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -109,6 +112,8 @@ class CambObject:
         self.mask_path = None
         # Fraction of sky allowed through by the mask
         self.mask_f_sky = None
+
+        self.masks_f_sky = []
 
     def set_dark_energy(self, w_0=-1, w_a=0):
         """
@@ -2393,3 +2398,404 @@ class CambObject:
 
         import sys
         sys.exit()
+
+    def manually_making_map(self):
+        ell = 75
+
+        alms = np.zeros(ell + 1, dtype=np.complex64)
+
+        rng = np.random.default_rng()
+
+        alms[0] = rng.standard_normal()
+
+        for m in range(1, ell + 1):
+            alms[m] = (rng.standard_normal() + 1j * rng.standard_normal())
+
+        n_side = 256
+        n_pix = 12 * n_side ** 2
+
+        map1 = np.zeros(n_pix)
+
+        for idx in range(len(map1)):
+            theta, phi = hp.pix2ang(n_side, idx)
+            for m in range(0, ell + 1):
+                if m == 0:
+                    map1[idx] += alms[m] * scispec.sph_harm(m, ell, phi, theta)
+                else:
+                    map1[idx] += 2 * np.real(alms[m] * scispec.sph_harm(m, ell, phi, theta))
+
+        hp.mollview(map1, cmap='seismic')
+        plt.show()
+
+    @staticmethod
+    def global_minima(x_vals, y_vals, return_y=False):
+        """
+        Function that computes the global minima of some data, that is assumed to follow y = f(x).
+
+        Args:
+            x_vals (ndarray): Array of x values
+            y_vals (ndarray): Array of y values evaluated at the x_vals
+            return_y (bool): Optional bool if the y value at the global minima should be returned too
+
+        Returns:
+            Either list(double, double) or double depending on return_y
+        """
+
+        # First, interpolate the provided x and y values
+        # Note that we use a spline of order 4, which guarantees that the derivative is a cubic spline
+        spline = sciinterp.InterpolatedUnivariateSpline(x_vals, y_vals, k=4)
+
+        # Now find where the derivative of the spline is equal to zero, i.e. a local minima or maxima
+        crit_pts = spline.derivative().roots()
+
+        # Now evaluate the spline at the local minima/maxima to find which index is the true global minima
+        min_index = np.argmin(spline(crit_pts))
+
+        # Find what the x value is at this global minima
+        crit_x = crit_pts[min_index]
+
+        # Also find the y value
+        crit_y = spline(crit_x)
+
+        # Return either the x and y values at this point, or just the x value
+        return [crit_x, crit_y] if return_y else crit_x
+
+    def simple_likelihood_as(self):
+        """
+        Function that implements a *very* simple likelihood calculation that allows us to estimate the value of A_s
+        from a convergence map
+
+        Returns:
+            None
+        """
+        lmax = 2000
+        ells = np.arange(2, lmax + 1)
+
+        # The N_side parameter of the generated maps & masks
+        n_side = 2048
+
+        # Convert our N_side parameter to the number of pixels in the map
+        n_pix = 12 * n_side ** 2
+
+        intrinsic_gal_ellip = 0.21  # The standard deviation of the intrinsic galaxy ellipticity distribution
+
+        avg_gal_den = 30  # This is the average surface galaxy density in [num gals / arc min^2]
+        area_per_pix = 1.49E8 / n_pix  # This is the total area in arcmin^2 divided by the number of pixels
+        num_gal_per_pix = avg_gal_den * area_per_pix
+
+        # Generate random Gaussian noise that will be added to our maps
+        random_noise = np.random.normal(loc=0, scale=intrinsic_gal_ellip / np.sqrt(num_gal_per_pix), size=n_pix)
+
+        # Compute what the expected Cl VALUE (singular) is for the shape noise.
+        theory_cl_noise = intrinsic_gal_ellip ** 2 / (avg_gal_den / (sciconst.arcminute ** 2))
+
+        theory_cl_noise = ells * (ells + 1) * theory_cl_noise / (2 * np.pi)
+
+        theory_cl_noise = np.zeros(lmax-1)
+
+        # Initiate a LCDM cosmology
+        params = camb.CAMBparams()
+        params.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=0.12)
+        params.InitPower.set_params(As=2.1E-9, ns=0.96)
+        params.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params.Want_CMB = False
+        params.WantCls = True
+        params.NonLinear = camb.model.NonLinear_both
+
+        # We want to evaluate the lensing power spectrum at z=2 only, for the moment.
+        params.SourceWindows = [GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+
+        # The range of A_s values that we want to compute the power spectrum at
+        a_s_vals = np.linspace(1e-9, 3e-9, 10)
+
+        # List which our Cl values will get stored into
+        cl_vals = []
+
+        # Go through each A_s value, compute the lensing power spec, and save to the list.
+        for a_s in a_s_vals:
+            params.InitPower.set_params(As=a_s, ns=0.96)
+
+            results = camb.get_results(params)
+
+            cls = results.get_source_cls_dict()
+
+            cl_vals.append(cls['W1xW1'][2:lmax+1])
+
+        # Now we want to spline the power spectrum at each ell to get this as a function of A_s.
+        # This allows us to predict the power spectra at arbitrary ell.
+        splines = []
+
+        for ell_idx in range(len(ells)):
+            splines.append(sciinterp.InterpolatedUnivariateSpline(a_s_vals,
+                                                                  [cl_vals[a_s_idx][ell_idx] for a_s_idx in
+                                                                   range(len(a_s_vals))]))
+
+        # Read in the unmasked convergence map that was created with A_s = 2.25E-9 and m_nu = 0.12
+        converg_map = hp.read_map(self.folder_path + 'Output-poisson-map-2-f2z2.fits', verbose=False, field=None)
+
+        # Add the random shape noise to our convergence map
+        # converg_map += random_noise
+
+        # Convert to C_ells
+        converg_cls = np.array(hp.anafast(converg_map, lmax=lmax)[2:])
+        converg_cls = ells * (ells + 1) * converg_cls / (2 * np.pi)
+
+        # Read in the Euclid-like mask
+        euclid_mask = hp.read_map('./resources/Euclid_masks/Euclid-gal-mask-2048.fits', verbose=False).astype(
+                np.bool)
+        sky_fraction = euclid_mask.sum() / euclid_mask.size
+
+        # Read in our mask that has a crazy small f_sky
+        mask2 = hp.read_map(self.folder_path + 'Masks/Mask1_2048.fits', verbose=False).astype(np.bool)
+        sky_fraction2 = mask2.sum() / mask2.size
+
+        masked_map = hp.ma(converg_map)
+        masked_map.mask = np.logical_not(euclid_mask)
+
+        masked_map2 = hp.ma(converg_map)
+        masked_map2.mask = np.logical_not(mask2)
+
+        # Obtain masked Cl's for both masks
+        masked_cls = np.array(hp.anafast(masked_map, lmax=lmax)[2:])
+        masked_cls = ells * (ells + 1) * masked_cls / (2 * np.pi) / sky_fraction
+
+        masked_cls2 = np.array(hp.anafast(masked_map2, lmax=lmax)[2:])
+        masked_cls2 = ells * (ells + 1) * masked_cls2 / (2 * np.pi) / sky_fraction2
+
+        plt.loglog(ells, converg_cls,
+                   lw=1, ls='-', c='tab:blue', label=r'$C_\ell$ recovered from full map')
+        plt.loglog(ells, masked_cls,
+                   lw=1, ls='-', c='orange', label=r'$C_\ell$ with Euclid mask')
+        plt.loglog(ells, masked_cls2,
+                   lw=1, ls='-', c='hotpink', label=r'$C_\ell$ with mask 2')
+        plt.show()
+
+        # Now we want to evaluate the likelihood for a range of A_s values to find the maximum-likelihood value
+        a_s_vals = np.linspace(1e-9, 5e-9, 100)
+
+        # Likelihood for our unmasked, Euclid mask, and custom mask
+        likelihoods = []
+        likelihoods_2 = []
+        likelihoods_3 = []
+
+        for a_s in a_s_vals:
+            cl_theory = np.array([splines[ell](a_s) for ell in range(len(ells))])
+
+            # Compute what the log-likelihood is for the three cases
+            log_lik = np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise) +
+                                               converg_cls / (cl_theory + theory_cl_noise)))
+            log_lik2 = np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise) +
+                                                masked_cls / (cl_theory + theory_cl_noise)))
+            log_lik3 = np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise)
+                                                + masked_cls2 / (cl_theory + theory_cl_noise)))
+
+            likelihoods.append(log_lik)
+            likelihoods_2.append(log_lik2)
+            likelihoods_3.append(log_lik3)
+
+        # Now compute the global minima of the likelihoods, to find the maximum-likelihood value of A_s
+        cr_pts = self.global_minima(a_s_vals, likelihoods)
+        cr_pts2 = self.global_minima(a_s_vals, likelihoods_2)
+        cr_pts3 = self.global_minima(a_s_vals, likelihoods_3)
+
+        print('Unmasked A_s: ', cr_pts)
+        print('Masked A_s: ', cr_pts2)
+        print('Masked2 A_s: ', cr_pts3)
+
+        # * Plot the likelihood as a function of A_s
+        # Note that we have to used a zoomed in sub-plot as the lines aren't separated by much
+
+        from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
+        from mpl_toolkits.axes_grid1.inset_locator import mark_inset
+
+        fig, ax = plt.subplots(figsize=(13, 7))
+        ax.scatter(a_s_vals, likelihoods, c='tab:blue', label='Unmasked')
+        ax.scatter(a_s_vals, likelihoods_2, c='orange', label='Masked')
+        ax.scatter(a_s_vals, likelihoods_3, c='hotpink', label='Masked2')
+
+        ax2 = zoomed_inset_axes(ax, 7, loc=1, borderpad=1)
+
+        ax2.scatter(a_s_vals, likelihoods, c='tab:blue', label='Unmasked')
+        ax2.scatter(a_s_vals, likelihoods_2, c='orange', label='Euclid mask')
+        ax2.scatter(a_s_vals, likelihoods_3, c='hotpink', label='Mask 2')
+
+        ax2.set_xlim(2.05e-9, 2.45e-9)
+        ax2.set_ylim(-3.105e7, -3.08e7)
+
+        mark_inset(ax, ax2, loc1=2, loc2=4, fc="none", ec="0.25")
+
+        ax.axvline(x=cr_pts, c='tab:blue')
+        ax.axvline(x=cr_pts2, c='orange')
+        ax.axvline(x=cr_pts3, c='hotpink')
+        ax.axvline(x=2.25E-9, c='tab:cyan', ls='--')
+
+        ax2.axvline(x=cr_pts, c='tab:blue')
+        ax2.axvline(x=cr_pts2, c='orange')
+        ax2.axvline(x=cr_pts3, c='hotpink')
+        ax2.axvline(x=2.25E-9, c='tab:cyan', ls='--')
+
+        ax.set_title(r'Log-likelihood as a function of $A_\textsc{s}$ for masked and unmasked maps')
+        ax.set_xlabel(r'$A_\textsc{s}$')
+        ax.set_ylabel(r'$\propto -\ln \mathcal{L}$')
+
+        ax.legend(loc='lower right')
+        fig.tight_layout()
+        plt.show()
+
+    def simple_likelihood_mnu(self):
+        """
+        Function that implements a *very* simple likelihood calculation that allows us to estimate the value of m_nu
+        from a convergence map
+
+        Returns:
+            None
+        """
+        lmax = 2000
+        ells = np.arange(2, lmax + 1)
+
+        # Initiate a LCDM cosmology
+        params = camb.CAMBparams()
+        params.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=0.12)
+        params.InitPower.set_params(As=2.25E-9, ns=0.96)
+        params.set_for_lmax(lmax, lens_potential_accuracy=1)
+
+        params.Want_CMB = False
+        params.WantCls = True
+        params.NonLinear = camb.model.NonLinear_both
+
+        # We want to evaluate the lensing power spectrum at z=2 only, for the moment.
+        params.SourceWindows = [GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+
+        # The range of m_nu values that we want to compute the power spectrum at
+        m_nu_vals = np.linspace(0, 0.25, 10)
+
+        # List which our Cl values will get stored into
+        cl_vals = []
+
+        # Go through each m_nu value, compute the lensing power spec, and save to the list.
+        for m_nu in m_nu_vals:
+            params.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=m_nu)
+
+            results = camb.get_results(params)
+
+            cls = results.get_source_cls_dict()
+
+            cl_vals.append(cls['W1xW1'][2:lmax+1])
+
+        # Now we want to spline the power spectrum at each ell to get this as a function of m_nu.
+        # This allows us to predict the power spectra at arbitrary ell.
+        splines = []
+
+        for ell_idx in range(len(ells)):
+            splines.append(sciinterp.InterpolatedUnivariateSpline(m_nu_vals,
+                                                                  [cl_vals[m_nu_idx][ell_idx] for m_nu_idx in
+                                                                   range(len(m_nu_vals))]))
+
+        # Read in the unmasked convergence map that was created with A_s = 2.25E-9 and m_nu = 0.12
+        converg_map = hp.read_map(self.folder_path + 'Output-poisson-map-2-f2z2.fits', verbose=False, field=None)
+
+        # Convert to C_ells
+        converg_cls = np.array(hp.anafast(converg_map, lmax=lmax)[2:])
+        converg_cls = ells * (ells + 1) * converg_cls / (2 * np.pi)
+
+        # Read in the Euclid-like mask
+        euclid_mask = hp.read_map('./resources/Euclid_masks/Euclid-gal-mask-2048.fits', verbose=False).astype(
+                np.bool)
+        sky_fraction = euclid_mask.sum() / euclid_mask.size
+
+        # Read in our mask that has a crazy small f_sky
+        mask2 = hp.read_map(self.folder_path + 'Masks/Mask1_2048.fits', verbose=False).astype(np.bool)
+        sky_fraction2 = mask2.sum() / mask2.size
+
+        masked_map = hp.ma(converg_map)
+        masked_map.mask = np.logical_not(euclid_mask)
+
+        masked_map2 = hp.ma(converg_map)
+        masked_map2.mask = np.logical_not(mask2)
+
+        # Obtain masked Cl's for both masks
+        masked_cls = np.array(hp.anafast(masked_map, lmax=lmax)[2:])
+        masked_cls = ells * (ells + 1) * masked_cls / (2 * np.pi) / sky_fraction
+
+        masked_cls2 = np.array(hp.anafast(masked_map2, lmax=lmax)[2:])
+        masked_cls2 = ells * (ells + 1) * masked_cls2 / (2 * np.pi) / sky_fraction2
+
+        plt.loglog(ells, converg_cls,
+                   lw=1, ls='-', c='tab:blue', label=r'$C_\ell$ recovered from full map')
+        plt.loglog(ells, masked_cls,
+                   lw=1, ls='-', c='orange', label=r'$C_\ell$ with Euclid mask')
+        plt.loglog(ells, masked_cls2,
+                   lw=1, ls='-', c='hotpink', label=r'$C_\ell$ with mask 2')
+        plt.show()
+
+        # Now we want to evaluate the likelihood for a range of A_s values to find the maximum-likelihood value
+        m_nu_vals = np.linspace(0, 0.25, 100)
+
+        # Likelihood for our unmasked, Euclid mask, and custom mask
+        likelihoods = []
+        likelihoods_2 = []
+        likelihoods_3 = []
+
+        for m_nu in m_nu_vals:
+            cl_theory = np.array([splines[ell](m_nu) for ell in range(len(ells))])
+
+            # Compute what the log-likelihood is for the three cases
+            log_lik = np.sum((2 * ells + 1) * (np.log(cl_theory) + converg_cls / cl_theory))
+            log_lik2 = np.sum((2 * ells + 1) * (np.log(cl_theory) + masked_cls / cl_theory))
+            log_lik3 = np.sum((2 * ells + 1) * (np.log(cl_theory) + masked_cls2 / cl_theory))
+
+            likelihoods.append(log_lik)
+            likelihoods_2.append(log_lik2)
+            likelihoods_3.append(log_lik3)
+
+        # Now compute the global minima of the likelihoods, to find the maximum-likelihood value of m_nu
+        cr_pts = self.global_minima(m_nu_vals, likelihoods)
+        cr_pts2 = self.global_minima(m_nu_vals, likelihoods_2)
+        cr_pts3 = self.global_minima(m_nu_vals, likelihoods_3)
+
+        print('Unmasked m_nu: ', cr_pts)
+        print('Masked m_nu: ', cr_pts2)
+        print('Masked2 m_nu: ', cr_pts3)
+
+        # * Plot the likelihood as a function of m_nu
+        # Note that we don't have to have the zoomed in sub-plot here, as separation isn't as much
+
+        from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
+        from mpl_toolkits.axes_grid1.inset_locator import mark_inset
+
+        fig, ax = plt.subplots(figsize=(13, 7))
+        ax.scatter(m_nu_vals, likelihoods, c='tab:blue', label='Unmasked')
+        ax.scatter(m_nu_vals, likelihoods_2, c='orange', label='Masked')
+        ax.scatter(m_nu_vals, likelihoods_3, c='hotpink', label='Masked2')
+
+        ax.axvline(x=cr_pts, c='tab:blue')
+        ax.axvline(x=cr_pts2, c='orange')
+        ax.axvline(x=cr_pts3, c='hotpink')
+        ax.axvline(x=0.12, c='tab:cyan', ls='--')
+
+        """
+        ax2 = zoomed_inset_axes(ax, 7, loc=1, borderpad=1)
+
+        ax2.scatter(m_nu_vals, likelihoods, c='tab:blue', label='Unmasked')
+        ax2.scatter(m_nu_vals, likelihoods_2, c='orange', label='Euclid mask')
+        ax2.scatter(m_nu_vals, likelihoods_3, c='hotpink', label='Mask 2')
+
+        ax2.set_xlim(2.05e-9, 2.45e-9)
+        ax2.set_ylim(-3.105e7, -3.08e7)
+
+        mark_inset(ax, ax2, loc1=2, loc2=4, fc="none", ec="0.25")
+
+        ax2.axvline(x=cr_pts, c='tab:blue')
+        ax2.axvline(x=cr_pts2, c='orange')
+        ax2.axvline(x=cr_pts3, c='hotpink')
+        ax2.axvline(x=0.12, c='tab:cyan', ls='--')
+        """
+
+        ax.set_title(r'Log-likelihood as a function of $\Sigma m_{\nu}$ for masked and unmasked maps')
+        ax.set_xlabel(r'$\Sigma m_{\nu}$')
+        ax.set_ylabel(r'$\propto -\ln \mathcal{L}$')
+
+        ax.legend(loc='lower right')
+        fig.tight_layout()
+        plt.show()
