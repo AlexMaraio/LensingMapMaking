@@ -1913,6 +1913,78 @@ class CambObject:
         plt.tight_layout()
         plt.show()
 
+    def generate_set_of_masks(self):
+        """
+        Here, we want to generate a set of masks that have different f_sky values, and so their effects on the recovered
+        power spectra will be different.
+
+        Returns:
+            None
+        """
+        # The N_side parameter for our trial masks
+        n_side = 1024
+        n_pix = 12 * n_side ** 2
+
+        if not os.path.isdir(self.folder_path + 'Masks'):
+            os.makedirs(self.folder_path + 'Masks')
+
+        if not os.path.isdir(self.folder_path + 'MaskedOutput'):
+            os.makedirs(self.folder_path + 'MaskedOutput')
+
+        plt.figure(figsize=(17, 10.25))
+
+        # Go through a range of theta values that constructs us the galactic and ecliptic plane cuts
+        for idx, theta in enumerate([1.05, 1.25, 1.5, 2, 3, 5, 7, 9, 15], start=1):
+            # Create the galactic plane cut coordinates
+            gal_th1 = (theta / 2 - 0.5) * np.pi / theta
+            gal_th2 = (theta / 2 + 0.5) * np.pi / theta
+
+            theta += 2
+
+            # Now create the ecliptic plane cut coordinates
+            elp_th1 = (theta / 2 - 0.5) * np.pi / theta
+            elp_th2 = (theta / 2 + 0.5) * np.pi / theta
+
+            # Create cut in galactic plane
+            region_gal = hp.query_strip(nside=n_side, theta1=gal_th1, theta2=gal_th2)
+            # Create cut in ecliptic plane
+            region_elp = hp.query_strip(nside=n_side, theta1=elp_th1, theta2=elp_th2)
+
+            map_gal = np.ones(n_pix)
+            map_elp = np.ones(n_pix)
+
+            # Mask out any regions according to our mask
+            map_gal[region_gal] = 0
+            map_elp[region_elp] = 0
+
+            # Combine both masks into a single map in galactic coordinates
+            map_both = np.logical_and(map_gal, hp.rotator.Rotator(coord='EG').rotate_map_pixel(map_elp))
+
+            # Compute the sky fraction allowed through by this mask
+            f_sky = map_both.sum() / map_both.size
+
+            # Store this in the class
+            self.masks_f_sky.append(f_sky)
+
+            print('Fraction of sky allowed through by the dummy mask is {num:.2f} %'.format(
+                    num=f_sky * 100))
+
+            # Plot the current mask onto the existing figure
+            hp.mollview(map_both, title=r"Mask with fsky {num:.2f} \%".format(num=f_sky), cmap='seismic',
+                        sub=[3, 3, idx], margins=(0.005, -0.5, 0.0, -0.5), xsize=400, cbar=False)
+            hp.graticule(verbose=False)
+
+            # Save the mask to the masks sub-folder
+            hp.write_map(self.folder_path + 'Masks/Mask' + str(idx) + '.fits', map_both, overwrite=True)
+
+        plt.show()
+
+        # Append the Euclid mask's f_sky
+        self.masks_f_sky.append(self.mask_f_sky)
+
+        # Also want to use the unmasked sky too
+        self.masks_f_sky.append(1)
+
     def custom_mask(self):
         """
         Function to generate a test map that has both the Milky Way and Solar System masked out, but no bright stars yet
