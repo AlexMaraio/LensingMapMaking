@@ -162,6 +162,10 @@ for our masked values, which gives:
 Here, we see that there is a very interesting peak that lies on the diagonal between *l* and *l* - 2. Here, we see a strong
 positive correlation between these values that was not previously observed for the unmasked values.
 
+**Note:** I have updated this plot with a new colour-bar which better reflects the nature of this data. Here, we still
+see the extremely strong correlation between *l* and *l* ± 2 modes, and again very little correlation outside of these
+modes.
+
 ## Looking at *Cl* bleed between *l*'s for masked maps
 
 Above, we can see that for our masked maps, there seems to be a slight positive correlation between different *l* modes
@@ -176,3 +180,181 @@ Now that we have these two maps, we can apply the Euclid mask and recover what t
 maps, which is shown below.
 
 ![Combined dummy mask](figures/investigating_masks/Cl_bleed/Recov_power_spec.png)
+
+## Power spectra for an ensemble for different masks
+
+Here, we want to look at the statistical features in the power spectrum by applying different sized masks. To do so, we
+need to average over vary many different realisations of individually masked maps to be able to view the affects of the
+mask, and isolate statistical noise to the best that we can.
+
+### Constructing nine masks
+
+First, we needed to construct a variety of masks that have different sky fractions. To do so, we generalised the previous
+method of constructing galactic and ecliptic cuts for the Milky Way and Solar System, respectively, but dynamically
+changing the thickness of the two cuts. Implementing this over a range of different thicknesses gives us the following
+nine masks
+
+![Nine masks](figures/investigating_masks/many_masks/9masks.png)
+
+We can see that our process has generated masks that range from blocking nearly all of the pixels through to letting
+most of the pixels through. By applying these different masks to many different convergence maps, we can try to find
+any statistical trends in the *Cl*'s on the sky-fraction.
+
+### Editing Flask
+
+In order to implement the masking and recovery of the *Cl* values for our many different masks in the most efficient way
+possible, the source code of Flask was edited to include the desired functionality.  
+The result of this was that Flask would recover eleven sets of *Cl* values for each realisation of the convergence map
+(the nine masks above, plus the Euclid mask, and of course the unmasked values), and save each to the disk. These were
+then read in by the Python code to be added to existing DataFrames.  
+With N_side of 1024 and l_max of 1000, both for performance reasons, the code took an average of 5.8 seconds per sample
+to do this.
+
+### Results
+
+We now present the results of averaging over our ensemble of maps, where we have generated 6,000 maps.
+
+#### Deviation from input power spectra
+
+Here, we want to look at how the average power spectra recovered from the masked maps deviates from the input power
+spectrum. Note that we have used a rolling average using three *l* modes at each point, which helped smooth out some
+of the rapid oscillations present in the recovered data, leaving behind the underlying pattern.
+
+![Nine masks](figures/investigating_masks/many_masks/RelativeDifference.png)
+
+Here, we see some very interesting behaviour: for low-*l* modes (less than around 200) we see that there is reduced power
+for the masked maps compared to the original power spectrum. We see that the more heavily the map is masked (indicated by
+a lower f<sub>sky</sub>), the more the power is suppressed on these large angular scales.
+Then above this point, there seems to be slightly more power compared to the original power spectrum,
+again with this increase growing as we decrease f<sub>sky</sub>.
+
+#### Variance
+
+We now want to look at how the variance of the recovered *Cl*'s change as we increase the masking of the maps. This
+is shown in the following figure
+
+![Nine masks](figures/investigating_masks/many_masks/Variance.png)
+
+Here, we have plotted the expectation from the Γ-distribution as a dashed cyan line. Here we see that as we decrease
+f<sub>sky</sub>, the variance seems to increase with a constant factor across all *l*. We can quantify this increase, by
+taking the ratio of the recovered lines with the expected values, to give
+
+![Nine masks](figures/investigating_masks/many_masks/VarianceRatio.png)
+
+Here, we see that for all lines except for the most heavily masked maps, this ratio is basically constant across all *l*,
+and is some function of f<sub>sky</sub>. A few functions were tried, e.g. 1/f<sub>sky</sub> and 1/sqrt(f<sub>sky</sub>),
+but nothing tired *yet* seems to fit these values.
+
+#### Skew
+
+We now want to look at the third moment of the *Cl*'s, skew. Again, we have taken a rolling average of three *l* modes
+to damp down some of the oscillations present in the original data.
+
+![Nine masks](figures/investigating_masks/many_masks/Skew.png)
+
+Here, we see that as we decrease f<sub>sky</sub>, the skewness increases, showing that even at very large *l* the
+skewness deviates significantly from the Gaussian case and from the expected values from the Γ-distribution (which
+is shown in the dashed cyan line).
+
+#### Kurtosis
+
+We can now look at the third moment of the *Cl*'s, kurtosis. Again, we have taken a rolling average of three *l* modes
+to clean up the data somewhat.
+
+![Nine masks](figures/investigating_masks/many_masks/Kurtosis.png)
+
+Again, we see that as we decrease f<sub>sky</sub>, the kurtosis of the data increases. However, once *l* increases past
+around 100, all lines except the most heavily masked, reduce to basically zero kurtosis (except noise).
+
+### Signal-to-noise of masked maps
+
+A very simple signal-to-noise calculation was performed for the nine masks above, averaging over our ensemble of
+six thousand realisations. Here, we have used the theoretical covariance matrix from the Γ-distribution, which assumes
+that all *l*-modes are independent of each other. This is true for our unmasked map, but we note that modes start to
+mix with each other as we introduce a mask. The results of this are
+
+![Signal to noise](figures/investigating_masks/Signal-to-noise.png)
+
+Here, we see that as we increase the fraction of sky surveyed, the S/N ratio increases, which is what we expected.
+
+## Recovering cosmological parameters from masked maps
+
+Now that we have established methods to mask convergence maps and naively recover the unmasked power spectrum, we can
+apply these methods to recover the cosmological parameters that were used to generate the original map. This is a
+formulation of a **very basic** likelihood code, which seeks to evaluate the posterior as a function of a singular
+cosmological parameter to find the maximum-likelihood value.  
+
+First, though, we need to define what the likelihood is in our case. Here, we have one set of "observed" *Cl*'s, denoted
+with a hat, and want to find the most likely parameters of our model that go into generating our theory *Cl*'s. If we
+assume that the *Cl*'s are normally distributed (we have shown this not to be true, but we will apply this approximation
+anyway), then we find that for a single *Cl* value, the logarithm of the posterior probability is proportional to
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=-\ln f(C_\ell \,|\, \hat{C}_\ell) \propto (2 \ell %2B 1) \left[\ln(C_\ell) %2B \frac{\hat{C}_\ell}{C_\ell} \right]." height=45> 
+</center>
+
+Since the total likelihood is proportional to the multiplication of *f* over all *l*, the log-likelihood will simply
+be the sum of the above quantity over all *l*:
+
+<center>
+<img src="https://render.githubusercontent.com/render/math?math=-\ln \mathscr{L} \propto \sum_{\ell} (2 \ell %2B 1) \left[\ln(C_\ell) %2B \frac{\hat{C}_\ell}{C_\ell} \right]." height=45> 
+</center>
+
+Here, we have assumed a uniform prior on the theory *Cl*'s (and thus cosmological values), but this can be incorporated
+into the above equation if so desired.
+
+We can now implement the above equation into our code, and extract results from it.
+
+### Recovering A_s
+
+The first parameter that was attempted to be recovered from a map was the scalar amplitude A_s. Here, we computed the
+likelihood for the unmasked map, the Euclid-like mask, and our first mask with f<sub>sky</sub> = 0.15%. This allows us
+to see if applying a mask changes the recovered cosmological parameters, even for our very simple case.
+
+The first test was on a pre-existing convergence map which was generated with A_s = 2.1E-9, so we want to see how
+close we can get to this value using our maximum-likelihood technique.
+
+![Nine masks](figures/recovering_params/A_s1.png)
+
+Here, we can see that the maximum-likelihood values predicted by all three maps are very close to the original value
+(which is shown by the dashed cyan line in the zoomed insert). We can see that the affect of masking gradually
+decreases the recovered A_s parameter, with the results being
+
+* Unmasked map: A_s = 2.102E-9
+* Euclid mask: A_s = 2.099E-9
+* Crazy mask: A_s = 2.094E-9
+
+Hence, even our crazy mask predicts a value of A_s that is very close to the true value, which is encouraging!
+
+We can now repeat the same analysis, but for a true A_s of 2.25E-9, just to see how robust the predictions are.
+
+![Nine masks](figures/recovering_params/A_s2.png)
+
+Here, we now see that the unmasked and Euclid masked maps predict A_s values that are very close to the true value,
+with our crazy mask predicting somewhat of a lower value of A_s, but still in the right ballpark:
+
+* Unmasked map: A_s = 2.252E-9
+* Euclid mask: A_s = 2.251E-9
+* Crazy mask: A_s = 2.215E-9
+
+### Recovering the neutrino masses
+
+Above, we were just trying to recover A_s, which simply scales the entire power spectrum and so is quite a simple value
+to predict from a map. Here, we wish to extend the above analysis, but now try to recover the sum of the neutrino masses.
+This causes scale-dependant suppression in the power spectrum, and so may be harder to predict than a simple scaling.
+
+Again, we look at the unmasked map, the Euclid-like mask, and our crazy mask.
+
+![Nine masks](figures/recovering_params/m_nu1.png)
+
+Here, we see some interesting results: all likelihoods dip around m_nu = 0.02eV, which causes the maximum-likelihood
+value for the unmasked map to be much smaller than what it should be. The two masked maps also feature this dip,
+but with is slightly weaker, and so the maximum-likelihood values here are much closer to the input value of 0.06eV.
+The results for this are:
+
+* Unmasked map:  sum m_nu = 0.00214 eV
+* Euclid mask: sum m_nu = 0.0587 eV
+* Crazy mask:  sum m_nu = 0.0620 eV
+
+Hence, even with a much harder value to predict from a map, our maximum-likelihood technique still manages to recover
+sensible, and quite close, values for the two masked maps.
