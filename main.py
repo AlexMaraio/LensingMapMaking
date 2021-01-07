@@ -2,6 +2,14 @@ from lib.RedshiftWindow import RedshiftWindow
 from lib.CambObject import CambObject
 from lib.Visualisations import Viz
 
+# Import the warnings module needed to silence them
+import warnings
+import matplotlib as mpl
+
+# Silence Matplotlib and Healpy warnings, which are very annoying
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=mpl.MatplotlibDeprecationWarning)
 
 if __name__ == '__main__':
     # Rough Euclid redshift window bins
