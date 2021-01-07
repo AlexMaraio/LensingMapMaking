@@ -117,6 +117,8 @@ class CambObject:
 
         self.masks_f_sky = []
 
+        self.masked_cl_out_dir = None
+
         # Ensure that the n_side parameter is an integer power of two
         if np.log2(n_side) != int(np.log2(n_side)):
             raise RuntimeError('The n_side parameter must be an integer power of 2, e.g. 512, 2048 etc!')
@@ -511,7 +513,7 @@ class CambObject:
         with_galaxy_counts = self.galaxy_dens
 
         filename = 'FlaskInput.config'
-        filename = self.folder_path + filename
+        filename = self.folder_path + self.masked_cl_out_dir + '/' + filename
 
         file = open(filename, 'w')
 
@@ -640,6 +642,16 @@ class CambObject:
         file.write('CATALOG_OUT: \t 0 \n')
         file.write('\nCATALOG_COLS: \t theta phi z kappa gamma1 gamma2 ellip1 ellip2\n')
 
+        # ? Masked Cl output folder, raise an error if this has not been set
+        if self.masked_cl_out_dir is None:
+            # Close file first before raising error
+            file.close()
+
+            raise RuntimeError('In order to save the masked Cl data correctly, the output folder is required! Please'
+                               'run the "set_multiple_masked_output" function beforehand.')
+
+        file.write('MASKED_OUTPUT_DIR: \t' + str(self.masked_cl_out_dir) + ' \n')
+
         file.close()
 
     def run_flask(self, use_rnd=None):
@@ -667,7 +679,9 @@ class CambObject:
         start_time = time.time()
 
         # Execute Flask as a subprocess run from the shell.
-        command = subprocess.run(str(self.flask_executable) + ' FlaskInput.config ' +
+        command = subprocess.run(str(self.flask_executable) + ' ' +
+                                 (str(self.masked_cl_out_dir) + '/' if self.masked_cl_out_dir is not None else '') +
+                                 'FlaskInput.config ' +
                                  ('RNDSEED: ' + str(random.randint(1, 1000000)) if use_rnd is not None else ''),
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
                                  cwd=self.folder_path, shell=True)
@@ -796,6 +810,26 @@ class CambObject:
         # Hand off to the plotting function which plots the output data
         self.plot_multiple_run_data(used_mask=use_mask)
 
+    def set_multiple_masked_output(self, output_folder):
+        """
+        Function that sets the output directory for Flask runs with multiple masks. Creates the provided folder if
+        it does not exist already.
+
+        Args:
+            output_folder (str): Folder to save the temporary Cl data from Flask for each run and final aggregated
+                                 Cl data
+
+        Returns:
+            None
+        """
+
+        # If the provided folder does not exist, then make it
+        if not os.path.isdir(self.folder_path + output_folder):
+            os.makedirs(self.folder_path + output_folder)
+
+        # Save the folder to the class
+        self.masked_cl_out_dir = output_folder
+
     def multiple_run_flask_with_masks(self, num_runs):
         """
         Custom function that runs Flask many times, applying ten different masks to the convergence maps to see how
@@ -807,6 +841,10 @@ class CambObject:
         Returns:
             None
         """
+
+        if self.masked_cl_out_dir is None:
+            raise RuntimeError('In order to save the masked Cl data correctly, the output folder is required! Please'
+                               'run the "set_multiple_masked_output" function beforehand.')
 
         # Time how long the total runs took
         start_time = time.time()
@@ -821,7 +859,7 @@ class CambObject:
             self.run_flask(use_rnd=True)
 
             for mask_num in range(1, 12):
-                cl_df = pd.read_csv(self.folder_path + 'MaskedOutput/' + 'MaskedCls' + str(mask_num) + '.dat',
+                cl_df = pd.read_csv(self.folder_path + self.masked_cl_out_dir + '/MaskedCls' + str(mask_num) + '.dat',
                                     sep=r'\s+')
 
                 cl_df.columns = cl_df.columns.str.lstrip()
@@ -842,12 +880,20 @@ class CambObject:
         # Save results for each mask separately
         for mask_num in range(1, 12):
             data_dfs['Mask' + str(mask_num)] = pd.concat(data_dfs['Mask' + str(mask_num)], ignore_index=True)
-            data_dfs['Mask' + str(mask_num)].to_csv(self.folder_path + 'AggregateCls_Mask' + str(mask_num) + '_2.csv',
-                                                    index=False)
+            data_dfs['Mask' + str(mask_num)].to_csv(self.folder_path + self.masked_cl_out_dir + '/AggregateCls_Mask' +
+                                                    str(mask_num) + '.csv', index=False)
 
         # Prints timing statistics
         print('The total time for the runs was {num:.3f} seconds, with an average of {numpersec:.3f} seconds/run'
               .format(num=time.time() - start_time, numpersec=(time.time() - start_time) / num_runs))
+
+        # Finally, go through each MaskedCl output file and delete them once done to tidy up
+        for mask_num in range(1, 12):
+            try:
+                os.remove(self.folder_path + self.masked_cl_out_dir + '/MaskedCls' + str(mask_num) + '.dat')
+            except OSError as err:
+                print("Error: couldn't delete file {file}, error is: {error}".format(file=err.filename,
+                                                                                     error=err.strerror))
 
     def plot_multiple_run_flask_with_masks(self):
         """
@@ -901,10 +947,8 @@ class CambObject:
 
             mask_key = 'Mask' + str(mask_num)
 
-            data_df1 = pd.read_csv(self.folder_path + 'AggregateRawCls_Mask' + str(mask_num) + '.csv')
-            data_df2 = pd.read_csv(self.folder_path + 'AggregateCls_Mask' + str(mask_num) + '_2.csv')
-
-            data_df = pd.concat([data_df1, data_df2], ignore_index=True)
+            data_df = pd.read_csv(
+                self.folder_path + self.masked_cl_out_dir + '/AggregateCls_Mask' + str(mask_num) + '.csv')
 
             for label, c_ells in data_df.items():
                 mean_val = np.mean(c_ells)

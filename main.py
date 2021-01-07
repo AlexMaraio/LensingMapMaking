@@ -88,6 +88,7 @@ if __name__ == '__main__':
 
     # non_linear.plot_1x2_map_power_spectrum(key='W1xW1', nside=2048)
 
+    non_linear.set_multiple_masked_output('Test1')
     non_linear.write_flask_config_file()
 
     non_linear.set_flask_executable('~/Documents/PhD/Codes/flask/bin/flask')
