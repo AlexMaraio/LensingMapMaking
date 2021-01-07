@@ -20,9 +20,9 @@ if __name__ == '__main__':
     window2 = RedshiftWindow(2.0, 0.05, enable_counts=True)
 
     # * Initiates three models, linear LCDM, non-linear LCDM, and non-linear wCDM
-    linear = CambObject('Linear', 5000, non_linear=False)
-    non_linear = CambObject('Non-linear', 5000, non_linear=True)
-    non_linear_de = CambObject('Non-linear-DE', 5000, non_linear=True)  # Non-linear model but now changing dark energy
+    linear = CambObject('Linear', 5000, 1024, non_linear=False)
+    non_linear = CambObject('Non-linear', 1000, 1024, non_linear=True)
+    non_linear_de = CambObject('Non-linear-DE', 5000, 1024, non_linear=True)  # Non-linear model but now changing dark energy
 
     # * Sets the window functions for our three models
     linear.set_window_functions([window1, window2])
@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
     # non_linear.plot_1x2_map_power_spectrum(key='W1xW1', nside=2048)
 
-    non_linear.write_flask_config_file(n_side=2048*1)
+    non_linear.write_flask_config_file()
 
     non_linear.set_flask_executable('~/Documents/PhD/Codes/flask/bin/flask')
 

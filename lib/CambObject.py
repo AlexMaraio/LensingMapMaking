@@ -31,7 +31,7 @@ num_ell = 1
 
 class CambObject:
 
-    def __init__(self, folder_path, lmax, non_linear=True):
+    def __init__(self, folder_path, lmax, n_side, non_linear=True):
         """
         General class that contains functions necessary to first compute the lensing power spectra for a given
         cosmology, save this power spectrum to the disk, input this spectra into Flask, run Flask multiple times
@@ -40,6 +40,8 @@ class CambObject:
         Args:
             folder_path (str): String that identifies where output data should be stored under the ./Data/ sub-directory
             lmax (int): Integer specifying the maximum l value that the lensing power spectrum should be computed to.
+            n_side (int): Integer specifying the HealPix N_side parameter for any map constructed for the class.
+                          Must be a power of 2 (e.g. 512, 1024, 2048, ...)
             non_linear (bool): Boolean value which indicates if we want to evaluate the non-linear
                                matter power spectrum (and thus the non-linear lensing spectrum)
         """
@@ -114,6 +116,13 @@ class CambObject:
         self.mask_f_sky = None
 
         self.masks_f_sky = []
+
+        # Ensure that the n_side parameter is an integer power of two
+        if np.log2(n_side) != int(np.log2(n_side)):
+            raise RuntimeError('The n_side parameter must be an integer power of 2, e.g. 512, 2048 etc!')
+
+        # Store the n_side parameter in the class
+        self.n_side = n_side
 
     def set_dark_energy(self, w_0=-1, w_a=0):
         """
@@ -222,6 +231,11 @@ class CambObject:
         # Load in the mask as a set of bool values
         print('Reading in provided mask now')
         mask = hp.read_map(mask_path, verbose=False).astype(np.bool)
+
+        # Ensure that the mask's N_side is the same as the classes, if not then raise a warning
+        if hp.get_nside(mask) != self.n_side:
+            raise RuntimeWarning('The provided mask\'s N_side does not appear to match the N_side attribute for the '
+                                 'class. This may or may not be a problem.')
 
         # Compute the fraction of sky let through by the mask
         sky_fraction = mask.sum() / mask.size
@@ -483,12 +497,9 @@ class CambObject:
         # Close file once done
         file.close()
 
-    def write_flask_config_file(self, n_side=2048):
+    def write_flask_config_file(self):
         """
         Function that writes a Flask configuration file to the disk
-
-        Args:
-            n_side (int): The N_side parameter that is used to construct the maps in Flask
 
         Returns:
             None
@@ -556,7 +567,7 @@ class CambObject:
         file.write('LRANGE: \t 2 ' + str(self.ell_max) + '\n')
         file.write('CROP_CL: \t 0 \n')
         file.write('SHEAR_LMAX: \t' + str(self.ell_max) + '\n')
-        file.write('NSIDE: \t ' + str(n_side) + ' \n')
+        file.write('NSIDE: \t ' + str(self.n_side) + ' \n')
         file.write('USE_HEALPIX_WGTS: \t 1 \n\n')
 
         file.write('\n## Covariance matrix regularisation##\n\n')
@@ -637,7 +648,7 @@ class CambObject:
 
         Args:
             use_rnd (bool): Flag which, when enabled, generates a new random number to be used as Flask's random number
-             seed - which allows the same input .config file to generate multiple different spectra
+            seed - which allows the same input .config file to generate multiple different spectra
 
         Returns:
             None, all data is written to the disk by Flask
