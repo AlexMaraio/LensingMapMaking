@@ -126,6 +126,9 @@ class CambObject:
         # Store the n_side parameter in the class
         self.n_side = n_side
 
+        # File extension used when saving figures, defaults to PDF's but can be changed to PNG's if needed
+        self.fig_ext = '.pdf'
+
     def set_dark_energy(self, w_0=-1, w_a=0):
         """
         Function to set the dark energy equation-of-state parameters. This includes the time evolution of the equation-
@@ -902,6 +905,7 @@ class CambObject:
         Returns:
             None
         """
+
         def moving_average(x, length):
             """
             Function that calculates the moving average of a given dataset
@@ -914,6 +918,13 @@ class CambObject:
                 array
             """
             return np.convolve(x, np.ones(length), 'valid') / length
+
+        # Ensure that the folder we wish to save the figures to exists, if not then make it
+        if not os.path.isdir(self.folder_path + self.masked_cl_out_dir + '/Figures'):
+            os.makedirs(self.folder_path + self.masked_cl_out_dir + '/Figures')
+
+        # Set the figure path
+        fig_path = self.folder_path + self.masked_cl_out_dir + '/Figures/'
 
         mean_cls = {'Mask11': [], 'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
                     'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
@@ -1010,6 +1021,7 @@ class CambObject:
         ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell / 2 \pi$')
         fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
         fig1.tight_layout()
+        fig1.savefig(fig_path + 'PowerSpec' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the variance divided by the average^2 Cl
         fig2, ax2 = plt.subplots(figsize=(13, 7))
@@ -1023,6 +1035,7 @@ class CambObject:
         ax2.set_ylabel(r'$\textrm{Var}[C_\ell] / \textrm{Avg}[C_\ell]^2$')
         fig2.colorbar(cmap, label=r'$f_\textrm{sky}$')
         fig2.tight_layout()
+        fig2.savefig(fig_path + 'NormVariance' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the variance of the Cl's divided by the Gamma-function prediction
         fig3, ax3 = plt.subplots(figsize=(13, 7))
@@ -1034,6 +1047,7 @@ class CambObject:
         ax3.set_ylabel(r'$(\textrm{Var}[C_\ell] / \textrm{Avg}[C_\ell]^2) / \Gamma$-function prediction')
         fig3.colorbar(cmap, label=r'$f_\textrm{sky}$')
         fig3.tight_layout()
+        fig3.savefig(fig_path + 'NormVarianceExp' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the raw variance of the Cl's
         fig3, ax3 = plt.subplots(figsize=(13, 7))
@@ -1045,6 +1059,7 @@ class CambObject:
         ax3.set_ylabel(r'$\textrm{Var}[C_\ell]$')
         fig3.colorbar(cmap, label=r'$f_\textrm{sky}$')
         fig3.tight_layout()
+        fig3.savefig(fig_path + 'Variance' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the relative difference between the average Cl and input values
         fig3, ax3 = plt.subplots(figsize=(13, 7))
@@ -1073,6 +1088,37 @@ class CambObject:
         ax3.set_title(r'Relative difference between average recovered $C_\ell$ and input values')
         fig3.colorbar(cmap, label=r'$f_\textrm{sky}$')
         fig3.tight_layout()
+        fig3.savefig(fig_path + 'ClRelDiff_MovAvg' + self.fig_ext, bbox_inches='tight')
+
+        # * Plot of the sum of the differences for different f_sky
+        fig3, ax3 = plt.subplots(figsize=fig_size)
+        for idx, mask_num in enumerate(range(1, MASK_MAX)):
+            ax3.plot(self.masks_f_sky[idx],
+                     np.sum(np.array(mean_cls['Mask' + str(mask_num)]) / self.c_ells['W4xW4'][2:] - 1), 'x',
+                     lw=2, label=r'Mask num ' + str(mask_num),
+                     c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax3.set_xlabel(r'$f_\textrm{sky}$')
+        ax3.set_ylabel(r'$\Sigma_\ell \left[ \,\, \hat{C}_\ell / C_\ell - 1 \right]$')
+        ax3.set_title(r'Sum of the relative differences in $C_\ell$ values for different $f_\textrm{sky}$')
+        fig3.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig3.tight_layout()
+        fig3.savefig(fig_path + 'SumRelDiff' + self.fig_ext, bbox_inches='tight')
+
+        # * Plot of the sum of the squared-residuals for different f_sky
+        fig3, ax3 = plt.subplots(figsize=fig_size)
+        for idx, mask_num in enumerate(range(1, MASK_MAX)):
+            ax3.plot(self.masks_f_sky[idx],
+                     np.sum((np.array(mean_cls['Mask' + str(mask_num)]) / self.c_ells['W4xW4'][2:] - 1) ** 2), 'x',
+                     lw=2, label=r'Mask num ' + str(mask_num),
+                     c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax3.set_xlabel(r'$f_\textrm{sky}$')
+        ax3.set_ylabel(r'$\Sigma_\ell \left[ \,\, \hat{C}_\ell / C_\ell - 1 \right]^2$')
+        ax3.set_title(r'Sum of the relative differences in $C_\ell$ values for different $f_\textrm{sky}$')
+        fig3.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig3.tight_layout()
+        fig3.savefig(fig_path + 'SumRelDiffSq' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the skew
         fig4, ax4 = plt.subplots(figsize=(13, 7))
@@ -1086,6 +1132,7 @@ class CambObject:
         ax4.set_xlabel(r'$\ell$')
         ax4.set_ylabel(r'Skew')
         fig4.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig4.savefig(fig_path + 'Skew' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the rolling average of the skew
         fig4, ax4 = plt.subplots(figsize=(13, 7))
@@ -1100,6 +1147,7 @@ class CambObject:
         ax4.set_ylabel(r'Rolling average of skew')
         fig4.colorbar(cmap, label=r'$f_\textrm{sky}$')
         fig4.tight_layout()
+        fig4.savefig(fig_path + 'Skew_MovAvg' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the kurtosis
         fig5, ax5 = plt.subplots(figsize=(13, 7))
@@ -1113,6 +1161,7 @@ class CambObject:
         ax5.set_ylabel(r'Excess kurtosis')
         fig5.colorbar(cmap, label=r'$f_\textrm{sky}$')
         fig5.tight_layout()
+        fig5.savefig(fig_path + 'Kurt' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the moving average of the kurtosis
         fig5, ax5 = plt.subplots(figsize=(13, 7))
@@ -1126,6 +1175,7 @@ class CambObject:
         ax5.set_ylabel(r'Rolling averaged excess kurtosis')
         fig5.colorbar(cmap, label=r'$f_\textrm{sky}$')
         fig5.tight_layout()
+        fig5.savefig(fig_path + 'Kurt_MovAvg' + self.fig_ext, bbox_inches='tight')
 
         plt.show()
 
