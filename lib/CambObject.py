@@ -672,7 +672,8 @@ class CambObject:
         if self.flask_executable is None:
             raise RuntimeError('Please first set the location of the Flask executable before running it!')
 
-        if not os.path.isfile(self.folder_path + 'FlaskInput.config'):
+        if not os.path.isfile(self.folder_path + 'FlaskInput.config') and \
+                not os.path.isfile(self.folder_path + self.masked_cl_out_dir + '/FlaskInput.config'):
             print('The Flask input file has not been previously generated, making one now')
             self.write_flask_config_file()
 
