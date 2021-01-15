@@ -20,7 +20,7 @@ that are from the CMB, and not from any other sources. To do so, WMAP employed t
 
 ![Galaxy counts power spectrum](figures/investigating_masks/WMAP_mask.png)
 
-In this figure, a value of one corresponds to allowing the data through the mask and a value of zero corresponds to
+In this figure, a value of one corresponds to allowing the data through the mask, and a value of zero corresponds to
 the data being masked out. Here, we see the large section that is masked out in the centre is the Milky Way. However,
 we also see many smaller regions have also been masked out throughout the entire map, which corresponds to bright stars and
 other objects that produce a large amount of noise - and so need to be masked out accordingly.
@@ -69,7 +69,7 @@ Solar System to be another cylindrical band but one slightly thinner going from 
 It is important to ask why we need to mask out both these regions. For the Milky Way, we have many bright star sources
 which affects the quality of the signal, but importantly for both the Milky Way and the Solar System, there are large
 quantities of cosmic dust in both of these regions which attenuates the observed signal. This means that we will observe
-less galaxies in these regions, and so the data analysis becomes much harder to perform as we don't know what the "true"
+fewer galaxies in these regions, and so the data analysis becomes much harder to perform as we don't know what the "true"
 signal should be in these situations.
 
 Now that we have our two individual regions that we want to mask out, we need to combine these to form a single mask.
@@ -105,7 +105,7 @@ line. We see that this basic correction seems to work remarkably well across all
 which is very interesting to see.  
 
 Now that we have some recovered *Cl* values from our mask (with our basic correction in place), we can look at how these
-recovered values compare to the original, unmasked values. Here, we tale the ratio of the masked values with the unmasked
+recovered values compare to the original, unmasked values. Here, we take the ratio of the masked values with the unmasked
 values, to give the plot below.
 
 ![Combined dummy mask](figures/investigating_masks/Ratio_of_converg_power.png)
@@ -145,7 +145,7 @@ prediction almost exactly.
 Here, we see that the skew and kurtosis statistics are generally much noisier than the mean or variance, but we see
 a general trend that the masked values predict a slightly larger value for both.
 
-We can try and get a better visualisation of the increased variance by producing KDE plots at each *l* for the two
+We can try to get a better visualisation of the increased variance by producing KDE plots at each *l* for the two
 sets of values.
 
 ![Combined dummy mask](figures/investigating_masks/ensemble_avg/Ridge_plot.png)
@@ -248,7 +248,7 @@ but nothing tired *yet* seems to fit these values.
 #### Skew
 
 We now want to look at the third moment of the *Cl*'s, skew. Again, we have taken a rolling average of three *l* modes
-to damp down some of the oscillations present in the original data.
+to damp down some oscillations present in the original data.
 
 ![Nine masks](figures/investigating_masks/many_masks/Skew.png)
 
@@ -358,3 +358,95 @@ The results for this are:
 
 Hence, even with a much harder value to predict from a map, our maximum-likelihood technique still manages to recover
 sensible, and quite close, values for the two masked maps.
+
+## Investigating power suppression at high _l_ when using masks
+
+In some plots of the power spectrum for masked maps, we can see that the _Cl_ values drop off at
+_l_ values that are close to the maximum _l_ value used. For example, see the first figure under
+the "Deviation from input power spectra" sub-section. Here, we would like to have a closer look
+at this effect, and see if it's invariant under changing conditions related to the mask/map
+generation.
+
+First, a mask with a very large _f_<sub>sky</sub> was created. This had _f_<sub>sky</sub> = 99.5%,
+which is far larger than any realistic mask and so any behaviour seen at this level will propagate
+into our actual masks. We tested this for two different values of _l_<sub>max</sub>: 1,000 and 2,000,
+both with N<sub>side</sub> of 1024 and 2048 to see if there were any artefacts caused by the resolution
+of the map. We ran each combination of _l_ and _N_ 5,000 times which should give us accurate averages.
+
+![Large f_sky comparison](figures/investigating_masks/Large_fsky_comparison.png)
+
+Here, we can see that this mysterious drop-off in power at high _l_ seems to scale with _l_<sub>max</sub>
+and is invariant upon the choice of _N_<sub>side</sub>.  
+It is not yet clear where this drop-off comes from, however it can be assumed that it arises from some
+way that HealPix applies a mask and then recovers the power spectra from this masked map.  
+It is interesting to see that while the _Cl_ values themselves seem to get suppressed at this high _l_,
+they seem to keep the same distribution (i.e. variance and other higher-order statistics don't seem to
+exhibit this feature).
+
+## Investigating masks with very small _f_<sub>sky</sub>
+
+In some above plots, we looked at masks that had _f_<sub>sky</sub> as small as 0.15%. While this is
+quite a small value, we wish to investigate the properties of masks that have an extremely small value
+of _f_<sub>sky</sub> (which is the opposite of the directly above section), and see if any interesting
+behaviour shows itself.  
+First, a set of nine masks all with small _f_<sub>sky</sub> were generated. To do this, we allowed data
+through in a small region that was centred on the origin of the map, and then decreased the radius of
+this area. Doing so allowed us to generate maps that have around four orders of magnitude difference in
+_f_<sub>sky</sub>, which is very useful for comparisons.
+
+![Nine masks all with a small f_sky](figures/investigating_masks/small_fsky/NineMasks.png)
+
+Note that the allowed regions in the last two maps are so small that the map plotting functions in
+HealPy seem to break down for some region, but these maps still seem ot be fully functional.
+
+Now that the masks have been generated, we can apply them in Flask to find what the recovered power spectra
+and its properties are. To do this, we used an ensemble of 30,000 maps, and the results are as follows:
+
+![Relative difference in Cl values](figures/investigating_masks/small_fsky/ClRelDiff.png)
+
+Here we see the expected results: the smaller _f_<sub>sky</sub> is the larger the deviation between the
+input and recovered Cl values are. We also see the usual behaviour where the recovered values are smaller
+than expected for _l_ values that are less than around 200, and larger above this threshold (with the usual
+suppression at _l_ values that are close to _l_<sub>max</sub>).
+
+![Variance](figures/investigating_masks/small_fsky/Variance.png)
+
+Now, let us look at the raw variance of the _Cl_'s. Here, we see some interesting behaviour: starting
+from the yellow line (which has the largest _f_<sub>sky</sub>), as we decrease the sky fraction we see that
+the variance at a given _l_ increases, but at low _l_ values (less than 100, or so) we see that as we
+further decrease _f_<sub>sky</sub> the variance actually decreases. However, at high _l_, we see that
+the variance is monotonically increasing as _f_<sub>sky</sub> decreases.  
+We can now look at the normalised variance, which is shown below.
+
+![Normalised varaince](figures/investigating_masks/small_fsky/NormVariance.png)
+
+If we now look at the variance of the _Cl_'s normalised by the average squared, we find that the
+increased variance over the theoretical values (shown in the dashed cyan line) scales monotonically
+as _f_<sub>sky</sub> decreases. We also see interesting behaviour in that there seems to be a
+fixed, limited variance at low _l_ that all masks tend to in this regime. This fixed normalised 
+variance seems to have a value of around two, and so could be interesting to see where this value
+arises from.  
+If we now look at the skewness of the data, we also see a form of limiting behaviour of the masks
+at low _l_:
+
+![Skew](figures/investigating_masks/small_fsky/Skew.png)
+
+Here, the skewness seems to have a limiting value of around 2.75, or so, and is still remarkably
+consistent across all the masks.  
+This limiting behaviour was also present in the kurtosis, but for brevity the figure was dropped.
+
+## Increased samples for clearer plots
+
+Now that HPC access via Cuillin is now possible, the amount of Flask runs per model can now be
+dramatically increased. One of the tasks that I wanted to do was to look at our "default" list
+of masks that cover a normal range of sky fraction values to look at the recovered power spectra
+in more detail. The plot below is the average of 30,000 individual realisations of the same input
+power spectra with our nine masks applied.
+
+![Skew](figures/investigating_masks/VeryManyClRelDiff.png)
+
+Here, we can see the power of using such large statistics is to severely reduce the noise in the
+averages. This allows us to clearly see that all nine masks seem to cross between under-estimating
+and over-estimating the power spectrum at exactly the same point, which is very roughly at _l_ of 200.
+It's still not clear _why_ this scale seems to be the turning point, and may be interesting to
+investigate this further.
