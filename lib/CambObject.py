@@ -589,7 +589,9 @@ class CambObject:
 
         # If we're using galaxy counts, then we can exit Flask once we have shear with noise, else just exit with Cl's
         if with_galaxy_counts:
-            file.write('EXIT_AT: \t MAPWERFITS_PREFIX \n')
+            file.write('EXIT_AT: \t SHEAR_FITS_PREFIX \n')
+            # file.write('EXIT_AT: \t RECOVCLS_OUT \n')
+            # ! file.write('EXIT_AT: \t MAPWERFITS_PREFIX \n')
         else:
             file.write('EXIT_AT: \t RECOVCLS_OUT \n')
 
@@ -633,17 +635,20 @@ class CambObject:
         # This is the map data of each field AFTER applying cosmic variance, mask, and Poisson galaxy sampling.
         # i.e. this is the most "noisiest" output, but is the closest to the observed values and what we need to model
         if with_galaxy_counts:
-            file.write('MAPWERFITS_PREFIX: \t Output-poisson-map- \n')
+            file.write('MAPWERFITS_PREFIX: \t 0 \n')
         else:
             file.write('MAPWERFITS_PREFIX: \t 0 \n')
         file.write('MAPWER_OUT: \t 0 \n')
 
         # Here outputs galaxy ellipticities values at each coordinate that includes galaxy noise
-        file.write('ELLIPFITS_PREFIX: \t Output-Ellip-map- \n')
+        file.write('ELLIPFITS_PREFIX: \t 0 \n')
         file.write('ELLIP_MAP_OUT: \t 0 \n')
 
         file.write('CATALOG_OUT: \t 0 \n')
         file.write('\nCATALOG_COLS: \t theta phi z kappa gamma1 gamma2 ellip1 ellip2\n')
+        file.write('CAT_COL_NAMES: \t 0 \n')
+        file.write('CAT32BIT: \t 0 \n')
+        file.write('REDUCED_SHEAR: \t 0 \n')
 
         # ? Masked Cl output folder, raise an error if this has not been set
         if self.masked_cl_out_dir is None:
