@@ -450,3 +450,71 @@ averages. This allows us to clearly see that all nine masks seem to cross betwee
 and over-estimating the power spectrum at exactly the same point, which is very roughly at _l_ of 200.
 It's still not clear _why_ this scale seems to be the turning point, and may be interesting to
 investigate this further.
+
+## Covariance matrix for masked maps
+
+Above, we have shown that the covariance matrix for a masked map is very different from that of an unmasked
+map; in particular for correlations between _l_ and _l_ ± 2 modes. Here, we would like to see how this difference
+evolves with a mask's _f_<sub>sky</sub> property. To do so, we used a set of 10, 000 realisations and applied
+nine individual masks to each. The covariance matrix was then evaluated for each mask up to a maximum _l_ value
+of 125, with the results as
+
+![Covariance animation](figures/covariance_matrix/CorrelationAnim.gif)
+
+Here, we can see that at the start of the animation (where _f_<sub>sky</sub> is very small) correlations between
+many different _l_ modes that are integer multiples of _l_ ± 2. These correlations decrease in strength as 
+_f_<sub>sky</sub> grows, but it is still possible to see the leading edge of the  _l_ and _l_ ± 2 modes as
+these remain having a high correlation for all the masks.  
+It is also interesting to see that all these strong correlations are positive, with only very small
+negative correlations.
+
+## Masking shear with E/B decomposition
+
+In all the above analysis of masks, we have been using the convergence (_κ_) maps because of their simplicity,
+as they are simply scalar maps described by spin-0 spherical harmonics. However, what we actually observe is
+the cosmic shear signal derived from the ellipticities, and so we want to see how masking affects the
+shear signal. As the shear signal is described in terms of a spin-2 field, it is analogous to the polarisation
+of the CMB. Hence, we can utilise the E/B decomposition to describe the shear field as two ordinary power
+spectra. As the B-modes carry the opposite parity to the T and E modes, we expect any cross-correlations between
+E and B to be zero, and the B-modes themselves to be zero. Therefore, if any of these signals are non-zero,
+then this would be a sign that masking interrupts the B-mode signal, and so needs special care when using. 
+
+To perform this decomposition, the `map2alm_pol` function in HealPix was used as this could properly deal with
+the spin-2 nature of the shear maps to produce the _alm_ coefficients for the T, E, and B signals which could
+then be combined to give the power spectra.
+
+### Average power spectra
+
+Here, we first look at the EE, EB, and BB power spectra averaged over 750 runs for three masks and an unmasked
+map to see what affect masking has on the recovered signal.
+
+![Covariance animation](figures/ShearEB/EE_Cl.png)
+
+![Covariance animation](figures/ShearEB/EB_Cl.png)
+
+![Covariance animation](figures/ShearEB/BB_Cl.png)
+
+Here, the BB signal is very interesting: for the unmasked sky we see that the power spectra is extremely small,
+which suggests that there is no actual signal and this is just a numerical artefact from the processing
+algorithm. However, as we decrease _f_<sub>sky</sub> even by just a little, we see that there is a large
+jump in amplitude of the BB signal, which would suggest that there is an actual signal here, and not just
+numerical noise. This BB signal then grows as we decrease _f_<sub>sky</sub> further, which suggests that the
+effect of masking is to introduce a phantom BB signal that is not there on the full-sky. This behaviour is
+mimicked in the EB signal.
+
+Note that as the EB signal can be positive or negative, we use the root-mean-square of the signal at each _l_,
+instead of the mean as that correctly deals with the sign flips, as we mostly care about the amplitude of the
+signal not the sign.
+
+### Variances
+
+Now that we have our set of _Cl_ values, we can also look at higher-order statistics than the mean, and so here
+we look at the variances of the signal.
+
+![Covariance animation](figures/ShearEB/EE_Var.png)
+
+![Covariance animation](figures/ShearEB/BB_Var.png)
+
+It is good to see that both the EE and BB signal produce the expected behaviour in that the variances
+follow the cosmic variance prediction very well (including the deviations expected when masking).
+
