@@ -4,9 +4,9 @@ import random
 import pathlib
 import time
 import ctypes
+import copy
 import mpmath
 import numpy as np
-from camb.sources import GaussianSourceWindow
 from scipy import stats as scistats
 from scipy import constants as sciconst
 from scipy import special as scispec
@@ -14,6 +14,7 @@ from scipy import interpolate as sciinterp
 import pandas as pd
 import functools
 import camb
+from camb.sources import GaussianSourceWindow
 import healpy as hp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -3133,4 +3134,301 @@ class CambObject:
 
         ax.legend(loc='lower right')
         fig.tight_layout()
+        plt.show()
+
+    def multiple_run_flask_with_shear(self, num_runs):
+        """
+        Custom function that runs Flask many times, applying ten different masks to the convergence maps to see how
+        changing f_sky affects the recovered data
+
+        Args:
+            num_runs (int): The number of times that Flask should be run
+
+        Returns:
+            None
+        """
+
+        if self.masked_cl_out_dir is None:
+            raise RuntimeError('In order to save the masked Cl data correctly, the output folder is required! Please'
+                               'run the "set_multiple_masked_output" function beforehand.')
+
+        # Time how long the total runs took
+        start_time = time.time()
+
+        # Dictionary of which is where we will store the shear values into
+        EE_data = {'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                   'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+
+        BB_data = {'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                   'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+
+        EB_data = {'Mask1': [], 'Mask2': [], 'Mask3': [], 'Mask4': [], 'Mask5': [], 'Mask6': [],
+                   'Mask7': [], 'Mask8': [], 'Mask9': [], 'Mask10': []}
+        # Here, 'Mask10' refers to the unmasked values
+
+        # Run Flask the given number of times to generate a power spectra each time
+        for run_num in range(num_runs):
+            self.run_flask(use_rnd=True)
+
+            for mask_num in range(1, 5):
+                cl_df = pd.read_csv(self.folder_path + self.masked_cl_out_dir + '/TEB_Cls_' + str(mask_num) + '.dat',
+                                    sep=r'\s+')
+
+                # cl_df.columns = cl_df.columns.str.lstrip()
+
+                # Get the ell values as a numpy array
+                ells = cl_df['ell'].to_numpy()
+
+                # Get the c_ell values normalised by ell(ell+1)/2pi, as usual
+                # Also normalise by 1 / f_sky for the specific mask in question
+                ee_vals = cl_df['EE'].to_numpy() * ells * (ells + 1) / (2 * np.pi) / self.masks_f_sky[
+                    mask_num - 1]
+
+                bb_vals = cl_df['BB'].to_numpy() * ells * (ells + 1) / (2 * np.pi) / self.masks_f_sky[
+                    mask_num - 1]
+
+                eb_vals = cl_df['EB'].to_numpy() * ells * (ells + 1) / (2 * np.pi) / self.masks_f_sky[
+                    mask_num - 1]
+
+                # Create a new dummy dataframe with out C_ell values, with an index determined by the ell values
+                ee_df = pd.DataFrame({'Cl': ee_vals}, index=ells)
+                bb_df = pd.DataFrame({'Cl': bb_vals}, index=ells)
+                eb_df = pd.DataFrame({'Cl': eb_vals}, index=ells)
+
+                EE_data['Mask' + str(mask_num)].append(ee_df.transpose())
+                BB_data['Mask' + str(mask_num)].append(bb_df.transpose())
+                EB_data['Mask' + str(mask_num)].append(eb_df.transpose())
+
+        # Save results for each mask separately
+        for mask_num in range(1, 5):
+            EE_data['Mask' + str(mask_num)] = pd.concat(EE_data['Mask' + str(mask_num)], ignore_index=True)
+            EE_data['Mask' + str(mask_num)].to_csv(self.folder_path + self.masked_cl_out_dir + '/EE_Cls_Mask' +
+                                                   str(mask_num) + '.csv', index=False)
+
+            BB_data['Mask' + str(mask_num)] = pd.concat(BB_data['Mask' + str(mask_num)], ignore_index=True)
+            BB_data['Mask' + str(mask_num)].to_csv(self.folder_path + self.masked_cl_out_dir + '/BB_Cls_Mask' +
+                                                   str(mask_num) + '.csv', index=False)
+
+            EB_data['Mask' + str(mask_num)] = pd.concat(EB_data['Mask' + str(mask_num)], ignore_index=True)
+            EB_data['Mask' + str(mask_num)].to_csv(self.folder_path + self.masked_cl_out_dir + '/EB_Cls_Mask' +
+                                                   str(mask_num) + '.csv', index=False)
+
+        # Prints timing statistics
+        print('The total time for the runs was {num:.3f} seconds, with an average of {numpersec:.3f} seconds/run'
+              .format(num=time.time() - start_time, numpersec=(time.time() - start_time) / num_runs))
+
+        # Finally, go through each MaskedCl output file and delete them once done to tidy up
+        for mask_num in range(1, 5):
+            try:
+                os.remove(self.folder_path + self.masked_cl_out_dir + '/TEB_Cls_' + str(mask_num) + '.dat')
+            except OSError as err:
+                print("Error: couldn't delete file {file}, error is: {error}".format(file=err.filename,
+                                                                                     error=err.strerror))
+
+    def plot_multiple_run_flask_with_shear(self):
+        """
+        Function to plot the data that was obtained for the shear E/B decomposition using the above function.
+
+        Returns:
+            None
+        """
+        num_maps = 4
+
+        # Temporary variables to construct the dictionaries out of
+        tmp_names = ['Mask' + str(num) for num in range(1, num_maps + 1)]
+        tmp_value = [np.zeros(self.ell_max - 1) for _ in range(1, num_maps + 1)]
+        tmp_dict = dict(zip(tmp_names, tmp_value))
+
+        # Create dictionaries that store the results in
+        EE_avg = copy.deepcopy(tmp_dict)
+        EE_var = copy.deepcopy(tmp_dict)
+        EE_skew = copy.deepcopy(tmp_dict)
+        BB_avg = copy.deepcopy(tmp_dict)
+        BB_var = copy.deepcopy(tmp_dict)
+        BB_skew = copy.deepcopy(tmp_dict)
+        EB_rms = copy.deepcopy(tmp_dict)  # Note that for EB we use root-mean-square (RMS) not mean values
+        EB_var = copy.deepcopy(tmp_dict)
+        EB_skew = copy.deepcopy(tmp_dict)
+
+        # Go through each map to compute statistics
+        for mask_num in range(1, num_maps + 1):
+
+            # Print the current working mask number
+            print(f'Mask {mask_num}', end='\t', flush=True)
+
+            mask_key = 'Mask' + str(mask_num)
+
+            # * Read in EE data
+            data_df = pd.read_csv(
+                self.folder_path + self.masked_cl_out_dir + '/EE_Cls_Mask' + str(mask_num) + '.csv')
+
+            data_df2 = pd.read_csv(
+                self.folder_path + 'Run2000/EE_Cls_Mask' + str(mask_num) + '.csv')
+
+            data_df = pd.concat([data_df, data_df2], ignore_index=True)
+
+            for label, c_ells in data_df.items():
+                ell_key = int(label) - 2
+
+                # Compute mean
+                mean_val = np.mean(c_ells)
+                EE_avg[mask_key][ell_key] = mean_val
+
+                # Compute variance
+                EE_var[mask_key][ell_key] = np.var(c_ells) / (mean_val * mean_val)
+
+                # Compute skew
+                EE_skew[mask_key][ell_key] = scistats.skew(c_ells, bias=True)
+
+            # * Read in BB data
+            data_df = pd.read_csv(
+                self.folder_path + self.masked_cl_out_dir + '/BB_Cls_Mask' + str(mask_num) + '.csv')
+
+            data_df2 = pd.read_csv(
+                self.folder_path + 'Run2000/BB_Cls_Mask' + str(mask_num) + '.csv')
+
+            data_df = pd.concat([data_df, data_df2], ignore_index=True)
+
+            for label, c_ells in data_df.items():
+                ell_key = int(label) - 2
+
+                # Compute mean
+                mean_val = np.mean(c_ells)
+                BB_avg[mask_key][ell_key] = mean_val
+
+                # Compute variance
+                BB_var[mask_key][ell_key] = np.var(c_ells) / (mean_val * mean_val)
+
+                # Compute skew
+                BB_skew[mask_key][ell_key] = scistats.skew(c_ells, bias=True)
+
+            # * Read in EB data
+            data_df = pd.read_csv(
+                self.folder_path + self.masked_cl_out_dir + '/EB_Cls_Mask' + str(mask_num) + '.csv')
+
+            data_df2 = pd.read_csv(
+                self.folder_path + 'Run2000/EB_Cls_Mask' + str(mask_num) + '.csv')
+
+            data_df = pd.concat([data_df, data_df2], ignore_index=True)
+
+            for label, c_ells in data_df.items():
+                ell_key = int(label) - 2
+
+                # Compute the root-mean-square of the set of values.
+                # As values can be negative, this is more accurate than the mean
+                mean_val = np.sqrt(np.mean(c_ells ** 2))
+                EB_rms[mask_key][ell_key] = mean_val
+
+                # Compute variance
+                EB_var[mask_key][ell_key] = np.var(c_ells ** 2) / (mean_val * mean_val)
+
+                # Compute skew
+                EB_skew[mask_key][ell_key] = scistats.skew(c_ells, bias=True)
+
+        fig_size = [11, 6]
+
+        # Create the colour-map from the f_sky values
+        norm = mpl.colors.LogNorm(vmin=min(self.masks_f_sky), vmax=max(self.masks_f_sky))
+        cmap = mpl.cm.ScalarMappable(norm=norm, cmap='plasma')
+        cmap.set_array([])
+
+        # Plot the EE mean
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, 5):
+            ax1.loglog(self.ells, EE_avg['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell^{\textrm{EE}} / 2 \pi$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig1.tight_layout()
+
+        # Plot the BB mean
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, 5):
+            ax1.loglog(self.ells, BB_avg['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell^{\textrm{BB}} / 2 \pi$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig1.tight_layout()
+
+        # Plot the EB RMS
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, 5):
+            ax1.loglog(self.ells, np.abs(EB_rms['Mask' + str(mask_num)]), lw=2, label=r'Mask num ' + str(mask_num),
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\textrm{RMS}[\ell (\ell + 1) C_\ell^{\textrm{EB}} / 2 \pi]$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig1.tight_layout()
+
+        # Plot the EE variance
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, 5):
+            ax1.loglog(self.ells, EE_var['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\textrm{Var}[C_\ell^{\textrm{EE}} ] / \textrm{Avg}^2 [C_\ell^{\textrm{EE}}]$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig1.tight_layout()
+
+        # Plot the BB variance
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, 5):
+            ax1.loglog(self.ells, BB_var['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\textrm{Var}[C_\ell^{\textrm{BB}} ] / \textrm{Avg}^2 [C_\ell^{\textrm{BB}}]$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig1.tight_layout()
+
+        # Plot the EB variance
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, 5):
+            ax1.loglog(self.ells, EB_var['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\textrm{Var}[C_\ell^{\textrm{EB}}] / \textrm{Avg}^2 [C_\ell^{\textrm{EB}}]$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig1.tight_layout()
+
+        # Plot the EE skew
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, 5):
+            ax1.semilogx(self.ells, EE_skew['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                         c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\textrm{Skew}[C_\ell^{\textrm{EE}}]$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig1.tight_layout()
+
+        # Plot the EB skew
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, 5):
+            ax1.semilogx(self.ells, EB_skew['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                         c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\textrm{Skew}[C_\ell^{\textrm{EB}}]$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig1.tight_layout()
+
+        # Plot the BB skew
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, 5):
+            ax1.semilogx(self.ells, BB_skew['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+                         c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\textrm{Skew}[C_\ell^{\textrm{BB}}]$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig1.tight_layout()
+
         plt.show()
