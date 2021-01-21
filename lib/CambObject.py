@@ -17,6 +17,8 @@ import camb
 import healpy as hp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib import colors
+from matplotlib import animation as pltanim
 import seaborn as sns
 
 from .flask_scripts.prepCambInput import split_files
@@ -1183,6 +1185,111 @@ class CambObject:
         fig5.tight_layout()
         fig5.savefig(fig_path + 'Kurt_MovAvg' + self.fig_ext, bbox_inches='tight')
 
+        plt.show()
+
+    def plot_correlation_animation(self, ell_max=125):
+        """
+        Function that reads in previously saved Cl data for different masks and produces an animation showing how the
+        correlation matrix changes with masks.
+
+        Args:
+            ell_max (int): Maximum ell value that the covariance matrix should be computed up to. 125 is a good default,
+                           max value is probably around 250 or so.
+
+        Returns:
+            None
+        """
+
+        # Here, the data variable is a list of DataFrames for different masks. In order to access it from the "animate"
+        # function below, we need to make it global here
+        global data
+        data = []
+
+        # Go through each mask
+        for idx in range(1, 10):
+            print('Mask ' + str(idx), end='\t', flush=True)
+
+            # Read in the set of Cl data
+            data_df = pd.read_csv(self.folder_path + self.masked_cl_out_dir + '/AggregateCls_Mask' + str(idx) + '.csv')
+
+            # Set up a dictionary that will have ell1, ell2, and correlation coefficient data
+            pearson_data = {'x': [], 'y': [], 'r': []}
+
+            # Go through each Cl combination and work out the Pearson correlation coefficient
+            for ell1, c_ells1 in data_df.items():
+                # Only go up to ell1 of ell_max which was provided
+                if int(ell1) > ell_max:
+                    continue
+
+                # Only want to compute samples where ell2 < ell1
+                for ell2, c_ells2 in data_df.items():
+                    if int(ell2) >= int(ell1):
+                        continue
+
+                    # Use the Pearson test to get correlation coefficient
+                    r_val, p_val = scistats.pearsonr(c_ells1, c_ells2)
+
+                    # Store the calculation results in the Pearson data dictionary
+                    pearson_data['x'].append(int(ell1))
+                    pearson_data['y'].append(int(ell2))
+                    pearson_data['r'].append(r_val)
+
+            # Turn our dictionary into a data-frame
+            pearson_df = pd.DataFrame(pearson_data)
+
+            # Pivot the data-frame to get it in the right format for plotting
+            pearson_df = pearson_df.pivot('x', 'y', 'r')
+
+            # Append the current DataFrame to our lists
+            data.append(pearson_df)
+
+        print('')
+
+        # For the colour-map, find the minimum and maximum correlation
+        min_val = np.min([np.min(data_iter) for data_iter in data])
+        max_val = np.max([np.max(data_iter) for data_iter in data])
+
+        # Print this data
+        print('Most negative correlation: {corr:.3f}'.format(corr=min_val))
+        print('Most positive correlation: {corr:.3f}'.format(corr=max_val))
+
+        # Set up the figure to start with: a heatmap with colour-bar and axis labels
+        fig = plt.figure()
+        sns.heatmap(data[0], vmax=1, vmin=min_val, square=True, cmap='seismic', center=0,
+                    norm=colors.SymLogNorm(linthresh=0.1, vmin=min_val, vmax=1),
+                    xticklabels='l2', yticklabels='l1')
+
+        def animate(frame_num):
+            """
+                Function that gets called every time a new frame is drawn in the animation
+
+            Args:
+                frame_num (int): The current frame number, provided by matplotlib's FuncAnimation function. Starts at 0
+
+            Returns:
+                None
+            """
+            # Update the heatmap by changing the data
+            sns.heatmap(data[frame_num], vmax=1, vmin=min_val, square=True, cbar=False, cmap='seismic', center=0,
+                        norm=colors.SymLogNorm(linthresh=0.1, vmin=min_val, vmax=1))
+
+            # Also update the plot title with mask number and f_sky
+            plt.title('Mask ' + str(frame_num + 1) + r', fsky: {fsky:.2f} \%'.format(
+                fsky=self.masks_f_sky[frame_num] * 100))
+
+            plt.xlabel('l1')
+            plt.ylabel('l2')
+
+        # Use the maptlotlib animation module to create the animation
+        anim = pltanim.FuncAnimation(fig, animate, frames=len(data), interval=750, repeat=True)
+
+        # Create a writer class to save the animation as a GIF
+        gif_writer = pltanim.PillowWriter(fps=3)
+
+        # Now save the animation
+        anim.save(self.folder_path + self.masked_cl_out_dir + '/CorrelationAnim.gif', writer=gif_writer)
+
+        # Also show the animation to the screen
         plt.show()
 
     def plot_multiple_run_data(self, used_mask=False):
