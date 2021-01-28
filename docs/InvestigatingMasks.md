@@ -466,7 +466,39 @@ many different _l_ modes that are integer multiples of _l_ ± 2. These correlati
 _f_<sub>sky</sub> grows, but it is still possible to see the leading edge of the  _l_ and _l_ ± 2 modes as
 these remain having a high correlation for all the masks.  
 It is also interesting to see that all these strong correlations are positive, with only very small
-negative correlations.
+negative correlations. This makes sense when looking at the power spectrum for a subset of masks used here, which
+is shown below:
+
+![Covariance animation](figures/investigating_masks/PowerSpecOfMasks.png)
+
+Here, we see that the mask only has power for even _l_, and is zero for odd _l_. Hence, when we convolve
+our original signal at an _l_ value, we expect to pick up major contributions from this at multipoles of _l_ ± 2,
+and other even multiples of two. This can be shown by starting out with power only at one _l_ mode, applying
+a mask, and recovering the power spectrum, which gives
+
+![Covariance animation](figures/investigating_masks/SingleLMode.png)
+
+Here, we can see that power is significantly increased for even multiples of 2 from our original _l_ value.
+This then makes sense why there are such strong correlations between these _l_ modes, as shown in the covariance
+matrix.
+
+### Evaluating the coupling matrix
+
+In the above animation of the covariance matrix, we show how a certain _l_ mode is coupled
+to integer multiples of ± 2 _l_. We can quantify these correlations by evalutating the symmetric
+mode-coupling matrix _G_, which is given as Equation 11 of
+[`astro-ph/0307515`](https://arxiv.org/pdf/astro-ph/0307515.pdf). To evaluate this, we used
+CAMB's `pcl_coupling_matrix` function, which is a fast implemtation of this equation. We then normalise
+this by (2 _l_<sub>2</sub> + 1) to turn the oridinary coupling matrix into the symmetric form,
+which gives
+
+![Covariance animation](figures/covariance_matrix/SymmetricCoupling.png)
+
+Here, we can see that the coupling matrix is only non-zero for even values of _l_<sub>1</sub> + _l_<sub>2</sub>,
+with larger values being close to the diagonal and smaller values further out. The coupling only
+being non-zero for even values of _l_<sub>1</sub> + _l_<sub>2</sub> makes sense when looking at the power
+spectrum of the mask: this is only non-zero for even values of _l_, and so for the Wigner-3*j* matrix
+to be non-zero _l_<sub>1</sub> + _l_<sub>2</sub> must be even (as the mask enforces _l_<sub>3</sub> to be even).
 
 ## Masking shear with E/B decomposition
 
@@ -505,6 +537,20 @@ mimicked in the EB signal.
 Note that as the EB signal can be positive or negative, we use the root-mean-square of the signal at each _l_,
 instead of the mean as that correctly deals with the sign flips, as we mostly care about the amplitude of the
 signal not the sign.
+
+The dashed cyan line in the EE plot is the expected EE signal from the convergence, and can be calculated
+by comparing the convergence and EE power spectra to the lensing potential, and so we can relate them together.
+This relation is a function of _l_, which tends to one at high _l_. Now that we have the theoretical prediction
+for the EE signal, we can take the ratio of the derived versus the prediction, and so accurate the recovered
+values are:
+
+![Covariance animation](figures/ShearEB/EE_Cl_ratio.png)
+
+Here, we see that the variations for the full-sky realisations are small and consistent with the theoretical
+prediction for the entire _l_ range. For the masked-sky realisations, we see that power is significantly
+suppressed at low _l_, but also extends to high _l_ too. This is in contrast to the convergence power spectrum
+where the masked sky actually overshoots the theory curve at high _l_. This suggests that power is being
+moved from the EE mode into the EB & BB modes, and so we expect the EE signal to be lower across all _l_.
 
 ### Variances
 
