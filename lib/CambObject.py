@@ -17,7 +17,7 @@ import camb
 from camb.sources import GaussianSourceWindow
 import healpy as hp
 import matplotlib as mpl
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
 from matplotlib import colors
 from matplotlib import animation as pltanim
 import seaborn as sns
@@ -1983,7 +1983,8 @@ class CambObject:
             # Store the cpp Cl's in the class
             self.my_cls_cpp.append(cls)
 
-    def use_cpp_map_to_alm(self):
+    @staticmethod
+    def use_cpp_map_to_alm():
         # Load the C++ shared library file that has already been compiled.
         lib = ctypes.CDLL('/home/amaraio/Documents/PhD/Codes/LensingMapMaking/lib/cpp/thingy.so')
 
@@ -2003,7 +2004,8 @@ class CambObject:
         # See how long it took
         print('My cpp map to alm calculation took {num:.2f} seconds'.format(num=time.time() - start_time))
 
-    def experimenting_with_masks(self):
+    @staticmethod
+    def experimenting_with_masks():
         """
         Here, we are playing around with masks and seeing what effects they have on the data!
         Not a real science function
@@ -2735,7 +2737,8 @@ class CambObject:
         import sys
         sys.exit()
 
-    def manually_making_map(self):
+    @staticmethod
+    def manually_making_map():
         ell = 75
 
         alms = np.zeros(ell + 1, dtype=np.complex64)
@@ -3338,8 +3341,25 @@ class CambObject:
             ax1.loglog(self.ells, EE_avg['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
                        c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
+        # The expected EE signal for the shear given the convergence
+        exp_EE = (self.ells + 2) * (self.ells - 1) / (self.ells * (self.ells + 1)) * self.c_ells['W4xW4'][2:]
+
+        ax1.loglog(self.ells, exp_EE, lw=2, label=r'Expectation', c='cyan', ls='--')
+
         ax1.set_xlabel(r'$\ell$')
         ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell^{\textrm{EE}} / 2 \pi$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        fig1.tight_layout()
+
+        # Plot the EE ratio
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, 5):
+            ax1.semilogx(self.ells, EE_avg['Mask' + str(mask_num)] / exp_EE - 1, lw=2,
+                         c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$C_\ell^{\textrm{EE}} / N(\ell) C_\ell^{\kappa \kappa} - 1$')
+        ax1.set_title('Ratio of recovered EE signal to expected signal from convergence')
         fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
         fig1.tight_layout()
 
