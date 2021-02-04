@@ -2375,15 +2375,19 @@ class CambObject:
             # Create cut in ecliptic plane
             region_elp = hp.query_strip(nside=self.n_side, theta1=elp_th1, theta2=elp_th2)
 
-            map_gal = np.ones(n_pix)
-            map_elp = np.ones(n_pix)
+            map_gal = np.ones(n_pix, dtype=np.bool)
+            map_elp = np.ones(n_pix, dtype=np.bool)
 
             # Mask out any regions according to our mask
             map_gal[region_gal] = 0
             map_elp[region_elp] = 0
 
             # Combine both masks into a single map in galactic coordinates
-            map_both = np.logical_and(map_gal, hp.rotator.Rotator(coord='EG').rotate_map_pixel(map_elp))
+            map_both = np.logical_and(map_gal, hp.rotator.Rotator(coord='EG').rotate_map_pixel(map_elp), dtype=np.bool)
+
+            # Manually delete maps to manage memory
+            del map_gal
+            del map_elp
 
             # Compute the sky fraction allowed through by this mask, before apodizing
             f_sky = map_both.sum() / map_both.size
