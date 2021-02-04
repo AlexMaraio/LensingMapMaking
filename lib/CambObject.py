@@ -1293,6 +1293,202 @@ class CambObject:
         # Also show the animation to the screen
         plt.show()
 
+    def plot_covariance_matrix(self):
+
+        lmax = 1000
+        ells = np.arange(2, lmax + 1)
+
+        mask_cls = []
+        covs = []
+        covs_th = []
+        num_vars = []
+
+        for idx in range(1, 10):
+            print(f'Mask {idx}', end='\t', flush=True)
+
+            mask = hp.read_map(self.folder_path + f'Masks/Mask{idx}.fits', verbose=False)
+
+            mask_cl = hp.anafast(mask, lmax=2 * lmax)
+            mask_cls.append(mask_cl[2:])
+
+            # Use CAMB to compute the mixing matrix
+            mask_matrix = camb.mathutils.scalar_coupling_matrix(mask_cl, lmax=lmax)[2:, 2:]
+
+            # Turn the mixing matrix into the symmetric form
+            mask_matrix /= (2 * ells + 1)[np.newaxis, :]
+
+            cov_th = 2 * self.c_ells['W4xW4'][2:] * np.transpose(self.c_ells['W4xW4'][2:]) * mask_matrix
+
+            covs_th.append(cov_th)
+
+            var_cls = []
+
+            data_df = pd.read_csv(self.folder_path + self.masked_cl_out_dir + '/AggregateCls_Mask' + str(idx) + '.csv')
+
+            data_df *= self.masks_f_sky[idx - 1]
+
+            for label, c_ells in data_df.items():
+                var_cls.append(np.var(c_ells))
+
+            num_vars.append(var_cls)
+
+            cov = np.cov(data_df.to_numpy(), rowvar=False)
+
+            covs.append(cov)
+        print('')
+
+        # * First, plot the Cl's for the various masks & Euclid mask
+
+        # Read in the Euclid mask
+        euclid_mask = hp.read_map('./resources/Euclid_masks/Euclid-gal-mask-1024.fits', verbose=False).astype(
+            np.bool)
+
+        # Calculate the Cl values for the mask
+        euclid_mask_cls = hp.anafast(euclid_mask, lmax=2 * lmax)[2:]
+
+        # Plot the Cl values for our masks and the Euclid mask
+        plt.figure(figsize=(11, 6))
+        cl_ells = np.arange(2, 2 * lmax + 1)
+
+        # Some nice colours to plot with
+        colours = ['tab:blue', 'orange', 'hotpink', 'purple', 'tab:cyan']
+
+        # Only plot half of the masks for plot clarity
+        for idx, cls in enumerate(mask_cls):
+            if idx % 2 != 0:
+                continue
+
+            # Plot only even ell
+            plt.loglog(cl_ells[::2], cl_ells[::2] * (cl_ells[::2] + 1) * cls[::2] / (2 * np.pi),
+                       lw=1.5, c=colours[idx // 2],
+                       label=r'$f_\textrm{{sky}} = {fsky:.2f} \%$'.format(fsky=self.masks_f_sky[idx] * 100))
+
+        plt.loglog(cl_ells, cl_ells * (cl_ells + 1) * euclid_mask_cls / (2 * np.pi),
+                   lw=1.5, c='lime', label='Euclid mask')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
+        plt.title(r'Power spectrum of mask for even $\ell$ only')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+        # * Now plot the numerical and theoretical form of the covariance matrices
+
+        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(13, 10), sharey=True)
+
+        # The selected mask number (ranges from 0 to 8)
+        mask_idx = 1
+
+        min_val = np.min([covs[mask_idx], covs_th[mask_idx]])
+        max_val = np.max([covs[mask_idx], covs_th[mask_idx]])
+        cmap = 'inferno'
+
+        im1 = ax1.imshow(covs[mask_idx], vmin=min_val, vmax=max_val, cmap=cmap)
+        ax1.set_xlabel(r'$\ell_1$')
+        ax1.set_ylabel(r'$\ell_2$')
+        ax1.set_title('Numerical covariance matrix')
+
+        im2 = ax2.imshow(covs_th[mask_idx], vmin=min_val, vmax=max_val, cmap=cmap)
+        ax2.set_xlabel(r'$\ell_1$')
+        ax2.set_title('Theory covariance matrix')
+
+        fig.subplots_adjust(right=0.85)
+        cbar_ax = fig.add_axes([0.9, 0.15, 0.05, 0.7])
+        fig.colorbar(im2, label=r'$\textrm{Cov}[\ell_1, \ell_2]$', cax=cbar_ax)
+
+        fig.suptitle(r'Comparison for mask {msk} ($f_\textrm{{sky}}: {fsky:.2f} \%$)'
+                     .format(msk=mask_idx + 1, fsky=self.masks_f_sky[0] * 100))
+
+        # * Plot the absolute difference
+        fig3, ax3 = plt.subplots()
+        im3 = ax3.imshow(covs[mask_idx] - covs_th[mask_idx], cmap=make_planck_colour_map(),
+                         vmin=-np.max(covs[mask_idx] - covs_th[mask_idx]))
+        ax3.set_xlabel(r'$\ell_1$')
+        ax3.set_ylabel(r'$\ell_2$')
+        ax3.set_title(f'Difference between covariance matrices for mask {mask_idx+1}')
+        fig3.colorbar(im3, label='Numerical - Theory')
+
+        plt.show()
+
+        fig, ax = plt.subplots(figsize=(11, 6))
+
+        ax.loglog(ells, np.diagonal(covs[0]), c='tab:blue', lw=3, label='Numerical covariance')
+        ax.loglog(ells, num_vars[0], c='orange', lw=1.5, label='Numerical variance', ls='--')
+        ax.loglog(ells, np.diagonal(covs_th[0]), c='hotpink', lw=1.5, label='Theory covariance')
+
+        # Also plot the expected variance of just the cosmic variance
+        ax.loglog(ells, 2 / (2 * ells + 1) * (self.c_ells['W4xW4'][2:] * self.masks_f_sky[0]) ** 2, ls='--', lw=2,
+                  color='cyan', label='Cosmic variance')
+
+        ax.set_xlabel(r'$\ell$')
+        ax.set_ylabel(r'$\textrm{Var}[C_\ell]$')
+        ax.set_title(r'Comarison of $C_\ell$ variance as a function of $\ell$ between theory and numerics')
+
+        plt.legend()
+        plt.tight_layout()
+
+        norm = mpl.colors.LogNorm(vmin=min(self.masks_f_sky), vmax=max(self.masks_f_sky))
+        cmap = mpl.cm.ScalarMappable(norm=norm, cmap='plasma')
+        cmap.set_array([])
+
+        fig, ax = plt.subplots(figsize=(11, 6))
+        for idx in range(9):
+            ax.semilogx(ells, np.diagonal(covs[idx]) / np.diagonal(covs_th[idx]) - 1, c=cmap.to_rgba(self.masks_f_sky[idx]))
+
+        ax.set_xlabel(r'$\ell$')
+        ax.set_ylabel(r'$\textrm{Numerical Var}[C_\ell] / \textrm{Theory Var}[C_\ell] - 1$')
+        ax.set_title('Ratio of the numetical to the theoretical variance')
+
+        fig.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        plt.tight_layout()
+        plt.show()
+
+        # * Now make an animation of the theory covariance matrix
+        fig, ax = plt.subplots()
+        cmap = 'inferno'
+
+        # Create the initial heatmap
+        im = ax.imshow(covs[0], cmap=cmap)
+
+        # Create a sub-axes that's on the right for the colorbar
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes('right', size='5%', pad=0.1)
+
+        # fig.colorbar(im, label=r'$\textrm{Cov}[\ell_1, \ell_2]$', cax=cax)
+
+        def animate(frame_num):
+            """
+                Function that gets called every time a new frame is drawn in the animation
+
+            Args:
+                frame_num (int): The current frame number, provided by matplotlib FuncAnimation function. Starts at 0
+
+            Returns:
+                None
+            """
+            # Clear the existing data on the axes
+            ax.clear()
+            cax.clear()
+
+            # Update the heatmap
+            im2 = ax.imshow(covs[frame_num], cmap=cmap)
+
+            fig.colorbar(im2, label=r'$\textrm{Cov}[\ell_1, \ell_2]$', cax=cax)
+
+            # Re-set axes labels
+            ax.set_xlabel(r'$\ell_1$')
+            ax.set_ylabel(r'$\ell_2$')
+
+            # Also update the plot title with mask number and f_sky
+            ax.set_title('Mask ' + str(frame_num + 1) + r', fsky: {fsky:.2f} \%'.format(
+                fsky=self.masks_f_sky[frame_num] * 100))
+
+        # Use the maptlotlib animation module to create the animation
+        anim = pltanim.FuncAnimation(fig, animate, frames=len(covs), interval=750, repeat=True)
+
+        plt.show()
+
     def plot_multiple_run_data(self, used_mask=False):
         """
         Function that plots data that has been calculated for multiple runs of Flask
