@@ -477,18 +477,21 @@ is shown below:
 Here, we see that the mask only has power for even _l_, and is zero for odd _l_. Hence, when we convolve
 our original signal at an _l_ value, we expect to pick up major contributions from this at multipoles of _l_ ± 2,
 and other even multiples of two. This can be shown by starting out with power only at one _l_ mode, applying
-a mask, and recovering the power spectrum, which gives
+a mask, and recovering the power spectrum. We do this for the Euclid-mask, and our simple mask (made out of 
+our two cuts and so exhibits the perfect odd-mode symmetry, and has a similar _f_<sub>sky</sub> value to 
+the Euclid mask), which gives
 
 ![Covariance animation](figures/investigating_masks/SingleLMode.png)
 
-Here, we can see that power is significantly increased for even multiples of 2 from our original _l_ value.
-This then makes sense why there are such strong correlations between these _l_ modes, as shown in the covariance
-matrix.
+Here, we can see that the perfect symmetry of the basic mask causes the odd-mode power to be vastly
+suppressed compared to the Euclid mask. Both masks feature strong increases for even multiples of 2 from 
+our original _l_ value, which again makes sense because both masks have strong(er) support at even _l_
+over odd _l_ values.
 
 ### Evaluating the coupling matrix
 
 In the above animation of the covariance matrix, we show how a certain _l_ mode is coupled
-to integer multiples of ± 2 _l_. We can quantify these correlations by evalutating the symmetric
+to integer multiples of ± 2 _l_. We can quantify these correlations by evaluating the symmetric
 mode-coupling matrix _G_, which is given as Equation 11 of
 [`astro-ph/0307515`](https://arxiv.org/pdf/astro-ph/0307515.pdf). To evaluate this, we used
 CAMB's `pcl_coupling_matrix` function, which is a fast implementation of this equation. We then normalise
