@@ -3030,7 +3030,7 @@ class CambObject:
 
         theory_cl_noise = ells * (ells + 1) * theory_cl_noise / (2 * np.pi)
 
-        theory_cl_noise = np.zeros(lmax-1)
+        # ! theory_cl_noise = np.zeros(lmax-1)
 
         # Initiate a LCDM cosmology
         params = camb.CAMBparams()
@@ -3046,7 +3046,8 @@ class CambObject:
         params.SourceWindows = [GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
 
         # The range of A_s values that we want to compute the power spectrum at
-        a_s_vals = np.linspace(1e-9, 3e-9, 10)
+        a_s_center = 2.1615E-9
+        a_s_vals = np.linspace(a_s_center - 5E-12, a_s_center + 5E-12, 10)
 
         # List which our Cl values will get stored into
         cl_vals = []
@@ -3071,14 +3072,17 @@ class CambObject:
                                                                    range(len(a_s_vals))]))
 
         # Read in the unmasked convergence map that was created with A_s = 2.25E-9 and m_nu = 0.12
-        converg_map = hp.read_map(self.folder_path + 'Output-poisson-map-2-f2z2.fits', verbose=False, field=None)
+        converg_map = hp.read_map(self.folder_path + 'KappaGammaMap-f2z2.fits', verbose=False, field=0)
 
         # Add the random shape noise to our convergence map
-        # converg_map += random_noise
+        converg_map_noise = converg_map + random_noise
 
         # Convert to C_ells
         converg_cls = np.array(hp.anafast(converg_map, lmax=lmax)[2:])
         converg_cls = ells * (ells + 1) * converg_cls / (2 * np.pi)
+
+        converg_cls_noise = np.array(hp.anafast(converg_map_noise, lmax=lmax)[2:])
+        converg_cls_noise = ells * (ells + 1) * converg_cls_noise / (2 * np.pi)
 
         # Read in the Euclid-like mask
         euclid_mask = hp.read_map('./resources/Euclid_masks/Euclid-gal-mask-2048.fits', verbose=False).astype(
@@ -3086,11 +3090,14 @@ class CambObject:
         sky_fraction = euclid_mask.sum() / euclid_mask.size
 
         # Read in our mask that has a crazy small f_sky
-        mask2 = hp.read_map(self.folder_path + 'Masks/Mask1_2048.fits', verbose=False).astype(np.bool)
+        mask2 = hp.read_map(self.folder_path + 'Masks/Mask1.fits', verbose=False).astype(np.bool)
         sky_fraction2 = mask2.sum() / mask2.size
 
         masked_map = hp.ma(converg_map)
         masked_map.mask = np.logical_not(euclid_mask)
+
+        masked_map_noise = hp.ma(converg_map_noise)
+        masked_map_noise.mask = np.logical_not(euclid_mask)
 
         masked_map2 = hp.ma(converg_map)
         masked_map2.mask = np.logical_not(mask2)
@@ -3098,6 +3105,9 @@ class CambObject:
         # Obtain masked Cl's for both masks
         masked_cls = np.array(hp.anafast(masked_map, lmax=lmax)[2:])
         masked_cls = ells * (ells + 1) * masked_cls / (2 * np.pi) / sky_fraction
+
+        masked_cls_noise = np.array(hp.anafast(masked_map_noise, lmax=lmax)[2:])
+        masked_cls_noise = ells * (ells + 1) * masked_cls_noise / (2 * np.pi) / sky_fraction
 
         masked_cls2 = np.array(hp.anafast(masked_map2, lmax=lmax)[2:])
         masked_cls2 = ells * (ells + 1) * masked_cls2 / (2 * np.pi) / sky_fraction2
@@ -3111,40 +3121,52 @@ class CambObject:
         plt.show()
 
         # Now we want to evaluate the likelihood for a range of A_s values to find the maximum-likelihood value
-        a_s_vals = np.linspace(1e-9, 5e-9, 100)
+        a_s_vals = np.linspace(a_s_center - 5E-12, a_s_center + 5E-12, 250)
 
         # Likelihood for our unmasked, Euclid mask, and custom mask
-        likelihoods = []
-        likelihoods_2 = []
-        likelihoods_3 = []
+        likelihoods1 = []
+        likelihoods2 = []
+        likelihoods3 = []
+        likelihoods4 = []
 
         for a_s in a_s_vals:
             cl_theory = np.array([splines[ell](a_s) for ell in range(len(ells))])
 
-            # Compute what the log-likelihood is for the three cases
-            log_lik = np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise) +
-                                               converg_cls / (cl_theory + theory_cl_noise)))
+            # * Compute what the log-likelihood is for the four cases:
+            # Unmasked map with no noise
+            log_lik = np.sum((2 * ells + 1) * (np.log(cl_theory) + converg_cls / cl_theory))
+
+            # Unmasked map with noise
             log_lik2 = np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise) +
-                                                masked_cls / (cl_theory + theory_cl_noise)))
-            log_lik3 = np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise)
-                                                + masked_cls2 / (cl_theory + theory_cl_noise)))
+                                                converg_cls_noise / (cl_theory + theory_cl_noise)))
 
-            likelihoods.append(log_lik)
-            likelihoods_2.append(log_lik2)
-            likelihoods_3.append(log_lik3)
+            # Masked map without noise
+            log_lik3 = np.sum((2 * ells + 1) * (np.log(cl_theory) + masked_cls / cl_theory ))
 
-        # Now compute the global minima of the likelihoods, to find the maximum-likelihood value of A_s
-        cr_pts = self.global_minima(a_s_vals, likelihoods)
-        cr_pts2 = self.global_minima(a_s_vals, likelihoods_2)
-        cr_pts3 = self.global_minima(a_s_vals, likelihoods_3)
+            # Masked map with noise
+            log_lik4 = np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise)
+                                                + masked_cls_noise / (cl_theory + theory_cl_noise)))
 
-        print('Unmasked A_s: ', cr_pts)
-        print('Masked A_s: ', cr_pts2)
-        print('Masked2 A_s: ', cr_pts3)
+            likelihoods1.append(log_lik)
+            likelihoods2.append(log_lik2)
+            likelihoods3.append(log_lik3)
+            likelihoods4.append(log_lik4)
+
+        # Now compute the global minima of the likelihoods1, to find the maximum-likelihood value of A_s
+        cr_pts1 = self.global_minima(a_s_vals, likelihoods1)
+        cr_pts2 = self.global_minima(a_s_vals, likelihoods2)
+        cr_pts3 = self.global_minima(a_s_vals, likelihoods3)
+        cr_pts4 = self.global_minima(a_s_vals, likelihoods4)
+
+        print(f'Unmasked no noise A_s: {cr_pts1:.4e}')
+        print(f'Unmasked with noise A_s: {cr_pts2:.4e}')
+        print(f'Masked no noise A_s: {cr_pts3:.4e}')
+        print(f'Masked with noise A_s: {cr_pts4:.4e}')
 
         # * Plot the likelihood as a function of A_s
         # Note that we have to used a zoomed in sub-plot as the lines aren't separated by much
 
+        """
         from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
         from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 
@@ -3180,6 +3202,41 @@ class CambObject:
 
         ax.legend(loc='lower right')
         fig.tight_layout()
+        """
+
+        fig, ax = plt.subplots(figsize=(13, 7))
+
+        likelihoods1 = np.array(likelihoods1)
+        likelihoods2 = np.array(likelihoods2)
+        likelihoods3 = np.array(likelihoods3)
+        likelihoods4 = np.array(likelihoods4)
+
+        min_val1 = np.min(likelihoods1)
+        a_s_center1 = a_s_vals[np.argmin(likelihoods1)]
+
+        min_val2 = np.min(likelihoods2)
+        a_s_center2 = a_s_vals[np.argmin(likelihoods2)]
+
+        min_val3 = np.min(likelihoods3)
+        a_s_center3 = a_s_vals[np.argmin(likelihoods3)]
+
+        min_val4 = np.min(likelihoods4)
+        a_s_center4 = a_s_vals[np.argmin(likelihoods4)]
+
+        ax.plot(a_s_vals - a_s_center1, np.exp(likelihoods1 - min_val1), c='tab:blue', label='Unmasked no noise')
+        ax.plot(a_s_vals - a_s_center2, np.exp(likelihoods2 - min_val2), c='orange', label='Unmasked with noise')
+        ax.plot(a_s_vals - a_s_center3, np.exp(likelihoods3 - min_val3), c='hotpink', label='Masked no noise', ls='--')
+        ax.plot(a_s_vals - a_s_center4, np.exp(likelihoods4 - min_val4), c='purple', label='Masked with noise', ls='--')
+
+        ax.set_xlim(left=-2E-12, right=2E-12)
+        ax.set_ylim(bottom=0.8, top=9.1)
+
+        ax.set_xlabel(r'$A_\textsc{s} - A_\textsc{s}^\textsc{ml}$')
+        ax.set_ylabel(r'$\sim -\mathcal{L}$')
+        ax.set_title(r'Normalised likelihoods where $\textrm{Min}[\mathcal{L}] = 1$')
+        plt.legend()
+        plt.tight_layout()
+
         plt.show()
 
     def simple_likelihood_mnu(self):
