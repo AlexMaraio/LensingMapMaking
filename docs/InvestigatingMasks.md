@@ -459,6 +459,9 @@ evolves with a mask's _f_<sub>sky</sub> property. To do so, we used a set of 10,
 nine individual masks to each. The covariance matrix was then evaluated for each mask up to a maximum _l_ value
 of 125, with the results as
 
+> Note that what is actually being displayed here is the *normalised* covariance matrix, which is simply the
+> Pearson correlation coefficient value, **not** the raw covariance matrices, these are shown below.
+
 ![Covariance animation](figures/covariance_matrix/CorrelationAnim.gif)
 
 Here, we can see that at the start of the animation (where _f_<sub>sky</sub> is very small) correlations between
@@ -488,8 +491,8 @@ In the above animation of the covariance matrix, we show how a certain _l_ mode 
 to integer multiples of ± 2 _l_. We can quantify these correlations by evalutating the symmetric
 mode-coupling matrix _G_, which is given as Equation 11 of
 [`astro-ph/0307515`](https://arxiv.org/pdf/astro-ph/0307515.pdf). To evaluate this, we used
-CAMB's `pcl_coupling_matrix` function, which is a fast implemtation of this equation. We then normalise
-this by (2 _l_<sub>2</sub> + 1) to turn the oridinary coupling matrix into the symmetric form,
+CAMB's `pcl_coupling_matrix` function, which is a fast implementation of this equation. We then normalise
+this by (2 _l_<sub>2</sub> + 1) to turn the ordinary coupling matrix into the symmetric form,
 which gives
 
 ![Covariance animation](figures/covariance_matrix/SymmetricCoupling.png)
@@ -499,6 +502,55 @@ with larger values being close to the diagonal and smaller values further out. T
 being non-zero for even values of _l_<sub>1</sub> + _l_<sub>2</sub> makes sense when looking at the power
 spectrum of the mask: this is only non-zero for even values of _l_, and so for the Wigner-3*j* matrix
 to be non-zero _l_<sub>1</sub> + _l_<sub>2</sub> must be even (as the mask enforces _l_<sub>3</sub> to be even).
+
+## Power spectra of masks
+
+Above, we plotted the power spectra for a few different masks that have different _f_<sub>sky</sub> values, but
+are fundamentally the same shape (just with different sized galactic and ecliptic bands). There, we showed that
+for odd _l_ modes, the Cl coefficients were zero, which is due to the symmetry of the map. Due to the large range
+in the y-axis needed it was hard to see how the amplitude of the values changed with _l_ for our different maps.
+Hence, here we plot the same data (with additional maps too), but now for even _l_ only.
+
+![even l power spectra](figures/investigating_masks/covariance/PowerSpecEvenL.png)
+
+Note that for the Euclid mask (the lime-green line) data is plotted for both even and odd l, as the values for
+odd-l are non-zero.  
+Here, we can see that in general the amplitude of the Cl values grow as _f_<sub>sky</sub> increases, with the
+oscillations becoming noisier too. The values also closely follow a 1/l behaviour, which means that the raw
+Cl values follow a 1/l<sup>3</sup> pattern.
+
+## Comparing analytic and numerical covariance matrices
+
+A key part of the pseudo-Cl technique is to recover the covariance matrix between the different _l_ modes without
+having to run an ensemble of realisations of the masked maps for each mask considered. The covariance matrix can
+be estimated through the mode-coupling matrix _G_ through the use of Equation 16 of `astro-ph/0307515`. As shown
+above, we can use CAMB to calculate the mixing matrix, and so we can get an estimate of the pseudo-Cl "analytic"
+covariance matrix. Furthermore, we can run an ensemble of realisations to estimate what the numerical form of the
+covariance matrix is, and so we can compare the two. Here, we used a set of 10,000 realisations for the numerical
+simulations. 
+
+![Numerical and theoretical covariance matrix](figures/investigating_masks/covariance/NumericalTheoryComparisonMask1.png)
+
+Here, we can see that the covariance matrix has very strong support on and around the diagonal, with values being
+very small outside this range. This band shrinks as _f_<sub>sky</sub> increases, which tells us that
+larger masks (i.e. masks that allow data through a larger area) cause less mode-mixing between the Cl's than
+smaller masks, which is what we expect.  
+We can compare the two covariance matrices by taking their differences, which gives
+
+![Difference between numerical and theoretical covariance matrix](figures/investigating_masks/covariance/DifferencesMask1.png)
+
+Here, we can see that the main differences are in the upper-left and lower-right corners. There is also a sizeable
+difference along the diagonal, but as this is the region with the largest amplitude of values, it is expected
+that the absolute difference will also be largest here.  
+For a comparison, here is the difference between numerical and theoretical covariance matrices for mask 9
+(which has _f_<sub>sky</sub> of around 81%)
+
+![Difference between numerical and theoretical covariance matrix 9](figures/investigating_masks/covariance/DifferencesMask9.png)
+
+This shows no trends in the differences as the values here are just random noise. It should be noted that the
+amplitude of the absolute differences have increased between masks 1 to 9, but the relative differences
+have decreased to sub-1% level. The reason why we can't compute the fractional difference is becasue the odd-l
+modes should have (close to) zero covariance, and so taking the ratio here will dominate the plots with noise.
 
 ## Masking shear with E/B decomposition
 
@@ -564,3 +616,63 @@ we look at the variances of the signal.
 It is good to see that both the EE and BB signal produce the expected behaviour in that the variances
 follow the cosmic variance prediction very well (including the deviations expected when masking).
 
+## Improved parameter estimation from likelihoods
+
+In above sections, a very basic likelihood code was written to try to extract the As value from a given map
+and compare with the "true"/input values. There, the values reported were simply proportional to the
+log-likelihood, with no normalisation made. Here, we would like to look at the curvature of the raw likelihood
+around the maximum-likelihood point. To do so, we can normalise the values such that when we exponentiate the
+likelihood, we find Min(L)=1. This was done for an unmasked map, and a map with the Euclid mask applied, for both
+maps without noise and with shape noise added. The results of these four are:
+
+![Normalised likelihoods](figures/Likelihoods/NormalisedLikelihood_as.png)
+
+Here, we have normalised the x-axis for each curve by taking centering the graph around the maximum likelihood
+value for each curve. This allows us to easily compare how small changes in As correspond to change in the
+likelihood across curves.  
+Here, we can see that for a very small change in As, of the order a 0.05% change, the likelihood doubles.
+This indicates that the actual likelihood is very sharply peaked around the optimal value of As, and so the
+constraints on As will be very small in this case (which is what we expect as A_s should be a well constrained
+parameter).  
+We note that the likelihood becomes broader when we add noise, which would transfer to looser parameter
+constraints on maps with noise over noiseless maps. We also note that the use of masking does not significantly
+alter the shape of the likelihood curves, only inducing a slight bias to smaller As values.
+
+### 2D likelihood of As-ns
+
+In the above analysis we focused on just the 1D probability distribution of A_s values, with all other cosmological
+parameters fixed. This is a gross simplification as, in general, there are many unknown parameters that values we do
+not know, and so we need to marginalise over all of these at once. To go from a 1D distribution to all
+cosmological parameters is quite a complex task, so let us extend to two parameters here, which can then be
+further generalised later.
+
+As the above liklelihood calculations focused on A_s, it was natural to extend them to include the scalar spectral
+index n_s too. This then gives us a 2D likelihood contour, as we can simply evaluate it over a grid of (A_s, n_s)
+values. This isn't the most efficient method, however is the simplest to code up. The results of this are
+
+![2D likelihood a_s n_s](figures/Likelihoods/As_ns.png)
+
+Here, we can see that the likelihood values generally form bands, where an increase in A_s leads to a decrease
+in n_s, for the same likelihood value. We have also labelled the maximum-likelihood point (the pink cross) and
+the true values for the map (the purple cross). We can see that these two values are quite close, which shows
+that our 2D likelihood code is still capable of recovering cosmological parameters from a map, even in 2D.
+
+#### Slices of the 2D likelihood
+
+In the above contour plot, we can see that bands have formed in the likelihood along the inverse diagonal
+in the plane of the plot. We would now like to look at these bands by taking slices of the contour
+at fixed n_s, giving us a likelihood in just the A_s plane:
+
+![Fixed slice of a_s n_s](figures/Likelihoods/As_fixed_ns.png)
+
+This nicely illustrates that we have found that for larger values of A_s, the likelihood prefers a smaller n_s,
+and vice versa.  
+Hence, looking at this leads us to think that there might be a slight degeneracy between A_s and n_S in the
+lensing power spectrum. Therefore, we can plot what the lensing power spectrum looks like for the maximum
+likelihood point for our three curves above, which gives
+
+![Lensing power spectrum for three models](figures/Likelihoods/Lensing_Asns.png)
+
+Here, we can see that for low _l_ (less than around one hundred) the three models predict quite different values
+for the lensing power spectrum. However, above this point they all start to converge to the same curve which
+is where the degeneracy in the likelihoods comes from.
