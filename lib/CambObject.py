@@ -3709,3 +3709,381 @@ class CambObject:
         fig1.tight_layout()
 
         plt.show()
+
+    def compare_EB_lmax_Nside(self):
+        num_maps = 4
+
+        for mask_num in range(1, num_maps + 1):
+            EE1 = []
+            EB1 = []
+            BB1 = []
+
+            EE2 = []
+            EB2 = []
+            BB2 = []
+
+            EE3 = []
+            EB3 = []
+            BB3 = []
+
+            EE4 = []
+            EB4 = []
+            BB4 = []
+
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_1000_1024/Run1' + '/EE_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                EE1.append(np.mean(c_ells))
+
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_1000_1024/Run1' + '/EB_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                EB1.append(np.sqrt(np.mean(c_ells ** 2)))
+
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_1000_1024/Run1' + '/BB_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                BB1.append(np.mean(c_ells))
+
+            """
+            2048
+            """
+
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_1000_2048/Run1' + '/EE_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                EE2.append(np.mean(c_ells))
+
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_1000_2048/Run1' + '/EB_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                EB2.append(np.sqrt(np.mean(c_ells ** 2)))
+
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_1000_2048/Run1' + '/BB_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                BB2.append(np.mean(c_ells))
+
+            """
+            2000, 1024
+            """
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_2000_1024/Run1' + '/EE_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                EE3.append(np.mean(c_ells))
+
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_2000_1024/Run1' + '/EB_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                EB3.append(np.sqrt(np.mean(c_ells ** 2)))
+
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_2000_1024/Run1' + '/BB_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                BB3.append(np.mean(c_ells))
+
+            """
+            2000, 2048
+            """
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_2000_2048/Run1' + '/EE_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                EE4.append(np.mean(c_ells))
+
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_2000_2048/Run1' + '/EB_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                EB4.append(np.sqrt(np.mean(c_ells ** 2)))
+
+            data_df = pd.read_csv('Data/Cuillin/EB_Shear_2000_2048/Run1' + '/BB_Cls_Mask' + str(mask_num) + '.csv')
+
+            for label, c_ells in data_df.items():
+                if mask_num is 4:
+                    c_ells *= self.mask_f_sky
+
+                BB4.append(np.mean(c_ells))
+
+            ells1 = np.arange(2, 1000 + 1)
+            ells2 = np.arange(2, 2000 + 1)
+
+            # Plot the EE mean
+            fig1, ax1 = plt.subplots(figsize=[11, 6])
+            ax1.loglog(ells1, EE1, lw=2, label=r'$\ell = 1000, N = 1024$', c='tab:blue')
+            ax1.loglog(ells1, EE2, lw=2, label=r'$\ell = 1000, N = 2048$', c='orange')
+            ax1.loglog(ells2, EE3, lw=2, label=r'$\ell = 2000, N = 1024$', c='hotpink')
+            ax1.loglog(ells2, EE4, lw=2, label=r'$\ell = 2000, N = 2048$', c='purple')
+
+            # The expected EE signal for the shear given the convergence
+            exp_EE = (self.ells + 2) * (self.ells - 1) / (self.ells * (self.ells + 1)) * self.c_ells['W4xW4'][2:]
+
+            ax1.loglog(self.ells, exp_EE, lw=2, label=r'Expectation', c='cyan', ls='--')
+
+            ax1.set_xlabel(r'$\ell$')
+            ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell^{\textrm{EE}} / 2 \pi$')
+            plt.legend()
+            fig1.tight_layout()
+
+            fig1, ax1 = plt.subplots(figsize=[11, 6])
+            ax1.loglog(ells1, EB1, lw=2, label=r'$\ell = 1000, N = 1024$', c='tab:blue')
+            ax1.loglog(ells1, EB2, lw=2, label=r'$\ell = 1000, N = 2048$', c='orange')
+            ax1.loglog(ells2, EB3, lw=2, label=r'$\ell = 2000, N = 1024$', c='hotpink')
+            ax1.loglog(ells2, EB4, lw=2, label=r'$\ell = 2000, N = 2048$', c='purple')
+
+            ax1.set_xlabel(r'$\ell$')
+            ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell^{\textrm{EB}} / 2 \pi$')
+            plt.legend()
+            fig1.tight_layout()
+
+            fig1, ax1 = plt.subplots(figsize=[11, 6])
+            ax1.loglog(ells1, BB1, lw=2, label=r'$\ell = 1000, N = 1024$', c='tab:blue')
+            ax1.loglog(ells1, BB2, lw=2, label=r'$\ell = 1000, N = 2048$', c='orange')
+            ax1.loglog(ells2, BB3, lw=2, label=r'$\ell = 2000, N = 1024$', c='hotpink')
+            ax1.loglog(ells2, BB4, lw=2, label=r'$\ell = 2000, N = 2048$', c='purple')
+
+            ax1.set_xlabel(r'$\ell$')
+            ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell^{\textrm{BB}} / 2 \pi$')
+            plt.legend()
+            fig1.tight_layout()
+            plt.show()
+
+    def pseudo_cl_recov(self):
+        for mask_num in range(1, 4):
+            mask = hp.read_map(self.folder_path + f'Masks/Mask{mask_num}.fits')
+            f_sky = mask.sum() / mask.size
+
+            mask_cls = hp.anafast(mask, lmax=2000)
+
+            data_df = pd.read_csv(self.folder_path + self.masked_cl_out_dir + f'/TEB_Cls_{mask_num}.dat',
+                                  sep=r'\s+')
+
+            mask_matrix = camb.mathutils.pcl_coupling_matrix(mask_cls, lmax=1000)
+
+            inv_mask_matrix = np.linalg.pinv(mask_matrix[2:, 2:])
+
+            recov_TT = np.dot(inv_mask_matrix, data_df['TT'].to_numpy())
+
+            fig1, ax1 = plt.subplots(figsize=(11, 6))
+            ax1.loglog(self.ells, self.ells * (self.ells + 1) * data_df['TT'] / (2 * np.pi) / f_sky, lw=2,
+                       c='tab:blue', label='No correction')
+            ax1.loglog(self.ells, self.ells * (self.ells + 1) * recov_TT / (2 * np.pi), lw=2,
+                       c='orange', label='Pseudo-Cl')
+            ax1.loglog(self.ells, self.c_ells['W4xW4'][2:], lw=2, label=r'Expectation', c='cyan', ls='--')
+
+            ax1.set_xlabel(r'$\ell$')
+            ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell^{\textrm{EE}} / 2 \pi$')
+            fig1.legend()
+            fig1.tight_layout()
+            plt.show()
+
+    def simple_likelihood_as_ns(self):
+        """
+        Function that implements a very simple likelihood code that tries to find the join parameter constraints on
+        As and ns
+
+        Returns:
+            None
+        """
+        lmax = 2000
+        ells = np.arange(2, lmax + 1)
+
+        # The N_side parameter of the generated maps & masks
+        n_side = 2048
+
+        # Convert our N_side parameter to the number of pixels in the map
+        n_pix = 12 * n_side ** 2
+
+        intrinsic_gal_ellip = 0.21  # The standard deviation of the intrinsic galaxy ellipticity distribution
+
+        avg_gal_den = 30  # This is the average surface galaxy density in [num gals / arc min^2]
+        area_per_pix = 1.49E8 / n_pix  # This is the total area in arcmin^2 divided by the number of pixels
+        num_gal_per_pix = avg_gal_den * area_per_pix
+
+        # Generate random Gaussian noise that will be added to our maps
+        random_noise = np.random.normal(loc=0, scale=intrinsic_gal_ellip / np.sqrt(num_gal_per_pix), size=n_pix)
+
+        # Compute what the expected Cl VALUE (singular) is for the shape noise.
+        theory_cl_noise = intrinsic_gal_ellip ** 2 / (avg_gal_den / (sciconst.arcminute ** 2))
+
+        # Include the l(l+1) / 2pi factor in the Cl valeus
+        theory_cl_noise = ells * (ells + 1) * theory_cl_noise / (2 * np.pi)
+
+        theory_cl_noise = np.zeros(lmax-1)
+
+        # Initiate a LCDM cosmology
+        params = camb.CAMBparams()
+        params.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=0.06)
+        params.InitPower.set_params(As=2.1E-9, ns=0.96)
+        # params.set_for_lmax(lmax, lens_potential_accuracy=1)
+        params.set_for_lmax(lmax, lens_potential_accuracy=0)
+
+        params.Want_CMB = False
+        params.WantCls = True
+        params.NonLinear = camb.model.NonLinear_both
+
+        # We want to evaluate the lensing power spectrum at z=2 only, for the moment.
+        params.SourceWindows = [GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
+
+        # The range of A_s values that we want to compute the power spectrum at
+        a_s_vals = np.linspace(1.5e-9, 5e-9, 5)
+        n_s_vals = np.linspace(0.6, 1.4, 10)
+
+        # List which our Cl values will get stored into
+        data_dict = {'As': [], 'ns': [], 'Cl': []}
+
+        print('Evaluating CAMB on the grid now')
+
+        # Go through each A_s value, compute the lensing power spec, and save to the list.
+        for a_s_idx, a_s in enumerate(a_s_vals):
+            for n_s_idx, n_s in enumerate(n_s_vals):
+                params.InitPower.set_params(As=a_s, ns=n_s)
+
+                results = camb.get_results(params)
+
+                cls = results.get_source_cls_dict()
+
+                data_dict['As'].append(a_s)
+                data_dict['ns'].append(n_s)
+                data_dict['Cl'].append(cls['W1xW1'][2:lmax+1])
+
+        print('Evaluate the splines now')
+
+        # Now we want to spline the power spectrum at each ell to get this as a function of A_s.
+        # This allows us to predict the power spectra at arbitrary ell.
+        splines = []
+
+        # The spline function that we will use to interpolate our 2D data
+        spline_func = sciinterp.RectBivariateSpline
+
+        for ell_idx in range(len(ells)):
+            # Transform our list into a 1D array, which can then be reshaped into a 2D one
+            c_l_arr = np.array([data_dict['Cl'][idx][ell_idx] for idx in range(len(a_s_vals) * len(n_s_vals))])
+
+            splines.append(spline_func(a_s_vals, n_s_vals, np.reshape(c_l_arr, (len(a_s_vals), len(n_s_vals)))))
+
+        # Read in the unmasked convergence map that was created with A_s = 2.25E-9 and m_nu = 0.12
+        converg_map = hp.read_map(self.folder_path + 'KappaGammaMap-f2z2.fits', verbose=False, field=0)
+
+        # Add the random shape noise to our convergence map
+        # converg_map += random_noise
+
+        # Convert to C_ells
+        converg_cls = np.array(hp.anafast(converg_map, lmax=lmax)[2:])
+        converg_cls = ells * (ells + 1) * converg_cls / (2 * np.pi)
+
+        # Now we want to evaluate the likelihood for a range of A_s values to find the maximum-likelihood value
+        a_s_vals = np.linspace(1.5e-9, 5e-9, 75)
+        n_s_vals = np.linspace(0.6, 1.4, 75)
+
+        # Likelihood for our unmasked, Euclid mask, and custom mask
+        likelihoods = np.zeros(shape=(len(a_s_vals), len(n_s_vals)))
+
+        print('Evaluating the likelihood now')
+
+        for a_s_idx, a_s in enumerate(a_s_vals):
+            for n_s_idx, n_s in enumerate(n_s_vals):
+                # Compute theory values for this (a_s, n_s) combination
+                cl_theory = np.array([splines[ell](a_s, n_s) for ell in range(len(ells))])
+                cl_theory = cl_theory[:, 0, 0]
+
+                # Compute the log-likelihood
+                log_lik = -1 * np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise) +
+                                                        converg_cls / (cl_theory + theory_cl_noise)))
+                likelihoods[a_s_idx, n_s_idx] = log_lik
+
+        # Find what the maximum likelihood value is
+        max_idx = np.unravel_index(np.argmax(likelihoods), likelihoods.shape)
+        max_as = a_s_vals[max_idx[0]]
+        max_ns = n_s_vals[max_idx[1]]
+
+        print(f'Maximum likelihood point is at A_s = {max_as:.3e}, n_s = {max_ns:.3f}')
+
+        likelihoods_as1 = []
+        likelihoods_as2 = []
+        likelihoods_as3 = []
+
+        # As we've got fixed n_s here, just go through A_s
+        for a_s_idx, a_s in enumerate(a_s_vals):
+            # Compute theory values for n_s = 0.90
+            cl_theory = np.array([splines[ell](a_s, 0.90) for ell in range(len(ells))])
+            cl_theory = cl_theory[:, 0, 0]
+
+            # Compute likelihoods for this n_s
+            log_lik = -1 * np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise) +
+                                                    converg_cls / (cl_theory + theory_cl_noise)))
+            likelihoods_as1.append(log_lik)
+
+            # Compute theory values for n_s = 0.96
+            cl_theory = np.array([splines[ell](a_s, 0.96) for ell in range(len(ells))])
+            cl_theory = cl_theory[:, 0, 0]
+
+            # Compute likelihoods for this n_s
+            log_lik = -1 * np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise) +
+                                                    converg_cls / (cl_theory + theory_cl_noise)))
+            likelihoods_as2.append(log_lik)
+
+            # Compute theory values for n_s = 1.05
+            cl_theory = np.array([splines[ell](a_s, 1.05) for ell in range(len(ells))])
+            cl_theory = cl_theory[:, 0, 0]
+
+            # Compute likelihoods for this n_s
+            log_lik = -1 * np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise) +
+                                                    converg_cls / (cl_theory + theory_cl_noise)))
+            likelihoods_as3.append(log_lik)
+
+        plt.figure()
+        plt.contourf(a_s_vals, n_s_vals, likelihoods, levels=250, cmap='viridis')
+        plt.plot(max_as, max_ns, 'x', c='hotpink', lw=4, markersize=10, label='Maximum likelihood')
+        plt.plot(2.1E-9, 0.96, 'x', c='purple', lw=4, markersize=10, label='True value')
+
+        plt.xlabel(r'$A_\textrm{s}$')
+        plt.ylabel(r'$n_\textrm{s}$')
+        plt.title(r'Log-likelihood in the $A_\textrm{s} - n_\textrm{s}$ plane')
+        plt.colorbar(label=r'$\ln \mathcal{L}$')
+        plt.legend()
+        plt.tight_layout()
+
+        # Now plot the 1D-likelihoods at fixed n_s
+        fig, ax = plt.subplots(figsize=(11, 6))
+        ax.scatter(a_s_vals, likelihoods_as1, c='orange', label=r'$n_\textrm{s} = 0.90$')
+        ax.scatter(a_s_vals, likelihoods_as2, c='tab:blue', label=r'$n_\textrm{s} = 0.96$')
+        ax.scatter(a_s_vals, likelihoods_as3, c='hotpink', label=r'$n_\textrm{s} = 1.05$')
+        ax.set_xlabel(r'$A_s$')
+        ax.set_ylabel(r'$\ln \mathcal{L}$')
+        ax.set_title(r'Log-likelihood as a function of $A_\textrm{s}$ for fixed $n_\textrm{s}$')
+        plt.legend()
+        plt.tight_layout()
+
+        plt.show()
