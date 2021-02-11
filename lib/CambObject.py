@@ -2624,8 +2624,8 @@ class CambObject:
         n_pix = 12 * n_side ** 2
 
         # Create two blank maps where we initially allow all light through the mask
-        map_gal = np.ones(n_pix)
-        map_elp = np.ones(n_pix)
+        map_gal = np.ones(n_pix, dtype=np.bool)
+        map_elp = np.ones(n_pix, dtype=np.bool)
 
         # Create a cylindrical region in galactic coordinates to represent the Milky Way
         region_gal = hp.query_strip(nside=n_side, theta1=1 * np.pi / 3, theta2=2 * np.pi / 3)
@@ -2651,15 +2651,19 @@ class CambObject:
         # Note that we have to rotate the Solar System mask from ecliptic coords to galactic coords
         map_both = np.logical_and(map_gal, hp.rotator.Rotator(coord='EG').rotate_map_pixel(map_elp))
 
+        # Do some manual memory management once got both combined
+        del map_gal
+        del map_elp
+
         print('Fraction of sky allowed through by the dummy mask is {num:.2f} %'.format(
-                num=100 * map_both.sum() / map_both.size))
+            num=100 * map_both.sum() / map_both.size))
 
         # Plot the resulting mask
         hp.mollview(map_both, coord='G', title="Both masks applied together", cmap='seismic')
         hp.graticule()
 
         # Also plot the mask using a spherical model
-        hp.orthview(map_both, rot=(0, 20, 15), coord='GE', title="Both masks applied together", cmap='seismic')
+        hp.orthview(map_both, rot=(0, 20, 15), title="Both masks applied together", cmap='seismic')
         hp.graticule()
 
         ell = np.arange(2, self.ell_max + 1)
@@ -2668,6 +2672,10 @@ class CambObject:
 
         euclid_mask = hp.read_map('./resources/Euclid_masks/Euclid-gal-mask-2048.fits', verbose=False).astype(
                 np.bool)
+
+        print('Fraction of sky allowed through by the Euclid mask is {num:.2f} %'.format(
+            num=100 * euclid_mask.sum() / euclid_mask.size))
+
         euclid_mask_cls = hp.anafast(euclid_mask, lmax=self.ell_max)
 
         # Plot the Cl values for our mask and
@@ -2688,55 +2696,39 @@ class CambObject:
         # * other Cl values equal to zero. From here, we then want to apply a mask and recover the power spectrum
         # * seeing how our single Cl mode that we started with bleeds across into other modes.
 
-        # The two ell values that we will activate
+        # The ell value that we will activate
         ell1 = 50
-        ell2 = 250
 
         # Set up two dummy sets of Cl values that are zero, except for a single ell mode
         dummy_cls1 = np.zeros(self.ell_max + 1)
-        dummy_cls1[ell1] = 1
-
-        dummy_cls2 = np.zeros(self.ell_max + 1)
-        dummy_cls2[ell2] = 1
+        dummy_cls1[ell1] = 2 * np.pi / (ell1 * (ell1 + 1))
 
         # Convert our Cl array into a map
         dummy_map1 = hp.synfast(dummy_cls1, nside=n_side, lmax=self.ell_max)
-        dummy_map2 = hp.synfast(dummy_cls2, nside=n_side, lmax=self.ell_max)
-
-        # Plot our two maps
-        plt.figure(figsize=(13, 7))
-        hp.mollview(dummy_map1, title=r"Dummy set of $C_\ell$ where only $\ell = " + str(ell1) + "$ equals one",
-                    cmap='seismic', sub=[1, 2, 1], margins=(0.005, 0.0, 0.0, -0.1))
-        hp.graticule()
-
-        hp.mollview(dummy_map2, title=r"Dummy set of $C_\ell$ where only $\ell = " + str(ell2) + "$ equals one",
-                    cmap='seismic',  sub=[1, 2, 2], margins=(0.0, 0.0, 0.005, -0.1))
-        hp.graticule()
 
         # Now mask our our map using the Euclid mask
         dummy_masked_map1 = hp.ma(dummy_map1)
         dummy_masked_map1.mask = np.logical_not(euclid_mask)
 
-        dummy_masked_map2 = hp.ma(dummy_map2)
-        dummy_masked_map2.mask = np.logical_not(euclid_mask)
+        # Mask our map using our existing dummy map
+        dummy_masked_map2 = hp.ma(dummy_map1)
+        dummy_masked_map2.mask = np.logical_not(map_both)
 
         # Recover the Cl's from the masked maps
         recov_cls1 = hp.anafast(dummy_masked_map1, lmax=self.ell_max)
         recov_cls2 = hp.anafast(dummy_masked_map2, lmax=self.ell_max)
 
         # Plot the original and recovered sets of Cl values
-        plt.figure(figsize=(13, 7))
+        plt.figure(figsize=(11, 6))
 
-        plt.loglog(ell, ell * (ell + 1) * dummy_cls1[2:] / (2 * np.pi),
-                   lw=3, c='tab:blue', label=r'Dummy $C_\ell$ 1')
-        plt.loglog(ell, ell * (ell + 1) * recov_cls1[2:] / (2 * np.pi),
-                   lw=3, c='orange', label=r'Recovered 1')
+        plt.semilogy(ell, ell * (ell + 1) * dummy_cls1[2:] / (2 * np.pi),
+                     lw=3, c='tab:blue', label=r'Input value')
+        plt.semilogy(ell, ell * (ell + 1) * recov_cls1[2:] / (2 * np.pi),
+                     lw=3, c='orange', label=r'Euclid mask')
+        plt.semilogy(ell, ell * (ell + 1) * recov_cls2[2:] / (2 * np.pi),
+                     lw=3, c='hotpink', label=r'Basic mask', alpha=0.7)
 
-        plt.loglog(ell, ell * (ell + 1) * dummy_cls2[2:] / (2 * np.pi),
-                   lw=3, c='tab:green', label=r'Dummy $C_\ell$ 2')
-        plt.loglog(ell, ell * (ell + 1) * recov_cls2[2:] / (2 * np.pi),
-                   lw=3, c='tab:pink', label=r'Recovered 2')
-
+        plt.xlim(left=0, right=100)
         plt.xlabel(r'$\ell$')
         plt.ylabel(r'$\ell(\ell+1)C_{\ell} / 2 \pi$')
         plt.title(r'Recovered power spectrum of a single mode with a mask applied')
