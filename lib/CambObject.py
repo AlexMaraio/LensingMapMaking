@@ -20,6 +20,7 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib import colors
 from matplotlib import animation as pltanim
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import seaborn as sns
 
 from .flask_scripts.prepCambInput import split_files
@@ -115,6 +116,7 @@ class CambObject:
 
         # Filepath for the mask used
         self.mask_path = None
+
         # Fraction of sky allowed through by the mask
         self.mask_f_sky = None
 
@@ -1294,20 +1296,35 @@ class CambObject:
         plt.show()
 
     def plot_covariance_matrix(self):
+        """
+        Function to plot the theoretical and numerical covariance matrices for a set of masks to compare how accurate
+        the Pseudo-Cl estimate of the covariance matrix is
 
+        Returns:
+            None
+        """
+
+        # The l_max that that we want to calculate the covariance matrices up to
         lmax = 1000
         ells = np.arange(2, lmax + 1)
 
+        # Lists to sotre data in
         mask_cls = []
         covs = []
         covs_th = []
         num_vars = []
 
-        for idx in range(1, 10):
+        # Go through each mask
+        for idx in range(1, 11):
             print(f'Mask {idx}', end='\t', flush=True)
 
-            mask = hp.read_map(self.folder_path + f'Masks/Mask{idx}.fits', verbose=False)
+            if idx < 10:
+                mask = hp.read_map(self.folder_path + f'Masks/Mask{idx}.fits', verbose=False)
+            else:
+                # Mask 10 is the Euclid mask
+                mask = hp.read_map('./resources/Euclid_masks/Euclid-gal-mask-1024.fits', verbose=False).astype(np.bool)
 
+            # Compute the Cl values for the mask, up to 2 * lmax
             mask_cl = hp.anafast(mask, lmax=2 * lmax)
             mask_cls.append(mask_cl[2:])
 
@@ -1335,6 +1352,9 @@ class CambObject:
             cov = np.cov(data_df.to_numpy(), rowvar=False)
 
             covs.append(cov)
+
+        # Turn our lists into an array
+        num_vars = np.array(num_vars)
         print('')
 
         # * First, plot the Cl's for the various masks & Euclid mask
@@ -1377,8 +1397,8 @@ class CambObject:
 
         fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(13, 10), sharey=True)
 
-        # The selected mask number (ranges from 0 to 8)
-        mask_idx = 1
+        # The selected mask number (ranges from 0 to 9, with 9 being Eulcid)
+        mask_idx = 9
 
         min_val = np.min([covs[mask_idx], covs_th[mask_idx]])
         max_val = np.max([covs[mask_idx], covs_th[mask_idx]])
@@ -1401,13 +1421,76 @@ class CambObject:
                      .format(msk=mask_idx + 1, fsky=self.masks_f_sky[0] * 100))
 
         # * Plot the absolute difference
+
+        print('Max difference {val:.3e}'.format(val=np.max(covs[mask_idx] - covs_th[mask_idx])))
+        print('Min difference {val:.3e}'.format(val=np.min(covs[mask_idx] - covs_th[mask_idx])))
+
         fig3, ax3 = plt.subplots()
         im3 = ax3.imshow(covs[mask_idx] - covs_th[mask_idx], cmap=make_planck_colour_map(),
                          vmin=-np.max(covs[mask_idx] - covs_th[mask_idx]))
         ax3.set_xlabel(r'$\ell_1$')
         ax3.set_ylabel(r'$\ell_2$')
-        ax3.set_title(f'Difference between covariance matrices for mask {mask_idx+1}')
+        ax3.set_title(f'Difference between covariance matrices for mask {mask_idx + 1}')
         fig3.colorbar(im3, label='Numerical - Theory')
+
+        # * Plot the relative difference (only around diagonal)
+
+        tmp_cov = covs[mask_idx]
+        tmp_cov_th = covs_th[mask_idx]
+
+        fig3, ax3 = plt.subplots()
+        im3 = ax3.imshow(tmp_cov / tmp_cov_th - 1, cmap=make_planck_colour_map(),
+                         vmin=-(np.max(tmp_cov / tmp_cov_th) - 1))
+        ax3.set_xlabel(r'$\ell_1$')
+        ax3.set_ylabel(r'$\ell_2$')
+        ax3.set_title(f'Relative difference between covariance matrices for mask {mask_idx + 1}')
+        fig3.colorbar(im3, label='Numerical / Theory - 1')
+
+        # Now compute what the relative difference matrix is
+        matrix = tmp_cov / tmp_cov_th - 1
+
+        # Extract the diagonal and off-diagonals of this matrix
+        diag = np.diagonal(matrix, offset=0)
+        diag_m1 = np.diagonal(matrix, offset=-1)
+        diag_m2 = np.diagonal(matrix, offset=-2)
+        diag_p1 = np.diagonal(matrix, offset=+1)
+        diag_p2 = np.diagonal(matrix, offset=+2)
+
+        # Redefine ells here to start at zero
+        ells = np.arange(0, lmax - 1)
+
+        # New figure for the one diagonal and four off-diagonal components
+        fig3, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(figsize=(11, 6), nrows=5, sharex=True)
+        ax1.scatter(ells[1:-1], diag_p2, c='lime', s=4)
+        ax2.scatter(ells[1:], diag_p1, c='purple', s=4)
+        ax3.scatter(ells, diag, c='cornflowerblue', s=4)
+        ax4.scatter(ells[1:], diag_m1, c='orange', s=4)
+        ax5.scatter(ells[2:-1], diag_m2[1:], c='hotpink', s=4)
+
+        ax1.set_ylabel('Diag + 2')
+        ax2.set_ylabel('Diag + 1')
+        ax3.set_ylabel('Diag')
+        ax4.set_ylabel('Diag - 1')
+        ax5.set_ylabel('Diag - 2')
+
+        ax5.set_xlabel(r'$\ell$')
+        ax1.set_title('Numerical covariance / theory covariance - 1')
+        fig3.tight_layout()
+
+        # * Now plot how close to symmetric the covariance matrices are
+        fig, ax = plt.subplots()
+
+        min_val = np.min(covs_th[mask_idx] - covs_th[mask_idx].T)
+        max_val = np.max(covs_th[mask_idx] - covs_th[mask_idx].T)
+        cmap = make_planck_colour_map()
+
+        im = ax.imshow(covs_th[mask_idx] - covs_th[mask_idx].T, vmin=min_val, vmax=max_val, cmap=cmap)
+
+        ax.set_xlabel(r'$\ell_1$')
+        ax.set_ylabel(r'$\ell_2$')
+        ax.set_title('Anti-symmetry of the theory covariance matrix')
+        fig.colorbar(im, label=r'$\textrm{Cov}[\ell_1, \ell_2] - \textrm{Cov}^\textrm{T}[\ell_1, \ell_2]$', aspect=15)
+        fig.tight_layout()
 
         plt.show()
 
@@ -1423,7 +1506,7 @@ class CambObject:
 
         ax.set_xlabel(r'$\ell$')
         ax.set_ylabel(r'$\textrm{Var}[C_\ell]$')
-        ax.set_title(r'Comarison of $C_\ell$ variance as a function of $\ell$ between theory and numerics')
+        ax.set_title(r'Comparison of $C_\ell$ variance as a function of $\ell$ between theory and numerics')
 
         plt.legend()
         plt.tight_layout()
@@ -1434,7 +1517,8 @@ class CambObject:
 
         fig, ax = plt.subplots(figsize=(11, 6))
         for idx in range(9):
-            ax.semilogx(ells, np.diagonal(covs[idx]) / np.diagonal(covs_th[idx]) - 1, c=cmap.to_rgba(self.masks_f_sky[idx]))
+            ax.semilogx(ells, np.diagonal(covs[idx]) / np.diagonal(covs_th[idx]) - 1,
+                        c=cmap.to_rgba(self.masks_f_sky[idx]))
 
         ax.set_xlabel(r'$\ell$')
         ax.set_ylabel(r'$\textrm{Numerical Var}[C_\ell] / \textrm{Theory Var}[C_\ell] - 1$')
