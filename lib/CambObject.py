@@ -3056,24 +3056,30 @@ class CambObject:
             Either list(double, double) or double depending on return_y
         """
 
-        # First, interpolate the provided x and y values
-        # Note that we use a spline of order 4, which guarantees that the derivative is a cubic spline
-        spline = sciinterp.InterpolatedUnivariateSpline(x_vals, y_vals, k=4)
+        # Wrap in a try-except as sometimes Numpy returns an error finding the minima
+        try:
+            # First, interpolate the provided x and y values
+            # Note that we use a spline of order 4, which guarantees that the derivative is a cubic spline
+            spline = sciinterp.InterpolatedUnivariateSpline(x_vals, y_vals, k=4)
 
-        # Now find where the derivative of the spline is equal to zero, i.e. a local minima or maxima
-        crit_pts = spline.derivative().roots()
+            # Now find where the derivative of the spline is equal to zero, i.e. a local minima or maxima
+            crit_pts = spline.derivative().roots()
 
-        # Now evaluate the spline at the local minima/maxima to find which index is the true global minima
-        min_index = np.argmin(spline(crit_pts))
+            # Now evaluate the spline at the local minima/maxima to find which index is the true global minima
+            min_index = np.argmin(spline(crit_pts))
 
-        # Find what the x value is at this global minima
-        crit_x = crit_pts[min_index]
+            # Find what the x value is at this global minima
+            crit_x = crit_pts[min_index]
 
-        # Also find the y value
-        crit_y = spline(crit_x)
+            # Also find the y value
+            crit_y = spline(crit_x)
 
-        # Return either the x and y values at this point, or just the x value
-        return [crit_x, crit_y] if return_y else crit_x
+            # Return either the x and y values at this point, or just the x value
+            return [crit_x, crit_y] if return_y else crit_x
+
+        except ValueError:
+            print('NumPy cannot find zeros of spline, returning zero')
+            return 0
 
     def simple_likelihood_as(self):
         """
