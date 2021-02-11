@@ -3753,7 +3753,7 @@ class CambObject:
         Returns:
             None
         """
-        num_maps = 4
+        num_maps = 5
 
         # Temporary variables to construct the dictionaries out of
         tmp_names = ['Mask' + str(num) for num in range(1, num_maps + 1)]
@@ -3783,13 +3783,11 @@ class CambObject:
             data_df = pd.read_csv(
                 self.folder_path + self.masked_cl_out_dir + '/EE_Cls_Mask' + str(mask_num) + '.csv')
 
-            data_df2 = pd.read_csv(
-                self.folder_path + 'Run2000/EE_Cls_Mask' + str(mask_num) + '.csv')
-
-            data_df = pd.concat([data_df, data_df2], ignore_index=True)
-
             for label, c_ells in data_df.items():
                 ell_key = int(label) - 2
+
+                if mask_num == 4:
+                    c_ells *= self.mask_f_sky
 
                 # Compute mean
                 mean_val = np.mean(c_ells)
@@ -3805,13 +3803,11 @@ class CambObject:
             data_df = pd.read_csv(
                 self.folder_path + self.masked_cl_out_dir + '/BB_Cls_Mask' + str(mask_num) + '.csv')
 
-            data_df2 = pd.read_csv(
-                self.folder_path + 'Run2000/BB_Cls_Mask' + str(mask_num) + '.csv')
-
-            data_df = pd.concat([data_df, data_df2], ignore_index=True)
-
             for label, c_ells in data_df.items():
                 ell_key = int(label) - 2
+
+                if mask_num == 4:
+                    c_ells *= self.mask_f_sky
 
                 # Compute mean
                 mean_val = np.mean(c_ells)
@@ -3827,13 +3823,11 @@ class CambObject:
             data_df = pd.read_csv(
                 self.folder_path + self.masked_cl_out_dir + '/EB_Cls_Mask' + str(mask_num) + '.csv')
 
-            data_df2 = pd.read_csv(
-                self.folder_path + 'Run2000/EB_Cls_Mask' + str(mask_num) + '.csv')
-
-            data_df = pd.concat([data_df, data_df2], ignore_index=True)
-
             for label, c_ells in data_df.items():
                 ell_key = int(label) - 2
+
+                if mask_num == 4:
+                    c_ells *= self.mask_f_sky
 
                 # Compute the root-mean-square of the set of values.
                 # As values can be negative, this is more accurate than the mean
@@ -3859,6 +3853,8 @@ class CambObject:
             ax1.loglog(self.ells, EE_avg['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
                        c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
+        ax1.loglog(self.ells, EE_avg['Mask5'], lw=2, c='cornflowerblue')
+
         # The expected EE signal for the shear given the convergence
         exp_EE = (self.ells + 2) * (self.ells - 1) / (self.ells * (self.ells + 1)) * self.c_ells['W4xW4'][2:]
 
@@ -3875,6 +3871,8 @@ class CambObject:
             ax1.semilogx(self.ells, EE_avg['Mask' + str(mask_num)] / exp_EE - 1, lw=2,
                          c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
+        ax1.semilogx(self.ells, EE_avg['Mask5'] / exp_EE - 1, lw=2, c='cornflowerblue')
+
         ax1.set_xlabel(r'$\ell$')
         ax1.set_ylabel(r'$C_\ell^{\textrm{EE}} / N(\ell) C_\ell^{\kappa \kappa} - 1$')
         ax1.set_title('Ratio of recovered EE signal to expected signal from convergence')
@@ -3887,6 +3885,11 @@ class CambObject:
             ax1.loglog(self.ells, BB_avg['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
                        c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
+        ax1.loglog(self.ells, BB_avg['Mask5'], lw=2, c='cornflowerblue')
+
+        # Plot 1% of the expected signal
+        ax1.loglog(self.ells, exp_EE * 0.01, lw=2, label=r'Expectation', c='cyan', ls='--')
+
         ax1.set_xlabel(r'$\ell$')
         ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell^{\textrm{BB}} / 2 \pi$')
         fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
@@ -3897,6 +3900,11 @@ class CambObject:
         for mask_num in range(1, 5):
             ax1.loglog(self.ells, np.abs(EB_rms['Mask' + str(mask_num)]), lw=2, label=r'Mask num ' + str(mask_num),
                        c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.loglog(self.ells, EB_rms['Mask5'], lw=2, c='cornflowerblue')
+
+        # Plot 1% of the expected signal
+        ax1.loglog(self.ells, exp_EE * 0.01, lw=2, label=r'Expectation', c='cyan', ls='--')
 
         ax1.set_xlabel(r'$\ell$')
         ax1.set_ylabel(r'$\textrm{RMS}[\ell (\ell + 1) C_\ell^{\textrm{EB}} / 2 \pi]$')
@@ -3909,6 +3917,8 @@ class CambObject:
             ax1.loglog(self.ells, EE_var['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
                        c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
+        ax1.loglog(self.ells, EE_var['Mask5'], lw=2, c='cornflowerblue')
+
         ax1.set_xlabel(r'$\ell$')
         ax1.set_ylabel(r'$\textrm{Var}[C_\ell^{\textrm{EE}} ] / \textrm{Avg}^2 [C_\ell^{\textrm{EE}}]$')
         fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
@@ -3920,10 +3930,28 @@ class CambObject:
             ax1.loglog(self.ells, BB_var['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
                        c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
+        ax1.loglog(self.ells, BB_var['Mask5'], lw=2, c='cornflowerblue')
+
         ax1.set_xlabel(r'$\ell$')
         ax1.set_ylabel(r'$\textrm{Var}[C_\ell^{\textrm{BB}} ] / \textrm{Avg}^2 [C_\ell^{\textrm{BB}}]$')
         fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
         fig1.tight_layout()
+
+        # Plot EE, EB and BB signal for Euclid
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+
+        ax1.loglog(self.ells, EE_avg['Mask5'], lw=2, c='cornflowerblue', label='$EE$')
+        ax1.loglog(self.ells, 0.01 * EE_avg['Mask5'], lw=2, ls='--', c='cornflowerblue', label=r'$1\% \, EE$')
+        ax1.loglog(self.ells, EB_rms['Mask5'], lw=2, c='orange', label='$EB$')
+        ax1.loglog(self.ells, BB_avg['Mask5'], lw=2, c='hotpink', label='$BB$')
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell^{ij} / 2 \pi$')
+        ax1.set_title('Summary of recovered power spectra for the Euclid mask')
+        plt.legend()
+        fig1.tight_layout()
+
+        plt.show()
 
         # Plot the EB variance
         fig1, ax1 = plt.subplots(figsize=fig_size)
