@@ -965,7 +965,10 @@ class CambObject:
         stns = []
 
         # Go through each mask and read in the data
-        for mask_num in range(1, 12):
+        mask_max = 10
+        for mask_num in range(1, mask_max):
+
+            print(f'Mask {mask_num}', end='\t', flush=True)
 
             mask_key = 'Mask' + str(mask_num)
 
@@ -1006,8 +1009,13 @@ class CambObject:
 
             stns.append(stn)
 
+        print('')
+
+        # The figure size selected for the plots
+        fig_size = [11, 6]
+
         # Plot the signal-to-noise as a function of f_sky
-        plt.figure(figsize=(13, 7))
+        plt.figure(figsize=fig_size)
         plt.semilogx(self.masks_f_sky, stns, 'bo')
 
         plt.xlabel(r'$f_\textrm{sky}$')
@@ -1016,13 +1024,14 @@ class CambObject:
         plt.tight_layout()
         plt.show()
 
-        norm = mpl.colors.Normalize(vmin=0, vmax=1)
+        # norm = mpl.colors.Normalize(vmin=min(self.masks_f_sky[:9]), vmax=max(self.masks_f_sky[:9]))
+        norm = mpl.colors.LogNorm(vmin=min(self.masks_f_sky[:9]), vmax=max(self.masks_f_sky[:9]))
         cmap = mpl.cm.ScalarMappable(norm=norm, cmap='plasma')
         cmap.set_array([])
 
-        fig1, ax1 = plt.subplots(figsize=(13, 7))
+        fig1, ax1 = plt.subplots(figsize=fig_size)
 
-        for mask_num in range(1, 12):
+        for mask_num in range(1, mask_max):
             ax1.loglog(self.ells, mean_cls['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
                        c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
@@ -1035,8 +1044,8 @@ class CambObject:
         fig1.savefig(fig_path + 'PowerSpec' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the variance divided by the average^2 Cl
-        fig2, ax2 = plt.subplots(figsize=(13, 7))
-        for mask_num in range(1, 12):
+        fig2, ax2 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, mask_max):
             ax2.loglog(self.ells, var_cls['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
                        c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
@@ -1049,8 +1058,8 @@ class CambObject:
         fig2.savefig(fig_path + 'NormVariance' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the variance of the Cl's divided by the Gamma-function prediction
-        fig3, ax3 = plt.subplots(figsize=(13, 7))
-        for mask_num in range(1, 12):
+        fig3, ax3 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, mask_max):
             ax3.loglog(self.ells, np.array(var_cls['Mask' + str(mask_num)]) / (2 / (2 * self.ells + 1)), lw=2,
                        label=r'Mask num ' + str(mask_num), c=cmap.to_rgba(self.masks_f_sky[mask_num - 1], alpha=0.8))
 
@@ -1061,8 +1070,8 @@ class CambObject:
         fig3.savefig(fig_path + 'NormVarianceExp' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the raw variance of the Cl's
-        fig3, ax3 = plt.subplots(figsize=(13, 7))
-        for mask_num in range(1, 12):
+        fig3, ax3 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, mask_max):
             ax3.loglog(self.ells, var2_cls['Mask' + str(mask_num)], lw=2,
                        label=r'Mask num ' + str(mask_num), c=cmap.to_rgba(self.masks_f_sky[mask_num - 1], alpha=0.8))
 
@@ -1073,8 +1082,8 @@ class CambObject:
         fig3.savefig(fig_path + 'Variance' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the relative difference between the average Cl and input values
-        fig3, ax3 = plt.subplots(figsize=(13, 7))
-        for mask_num in range(1, 12):
+        fig3, ax3 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, mask_max):
             ax3.semilogx(self.ells, np.array(mean_cls['Mask' + str(mask_num)]) / self.c_ells['W4xW4'][2:] - 1,
                          lw=2, label=r'Mask num ' + str(mask_num),
                          c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
@@ -1085,10 +1094,11 @@ class CambObject:
         ax3.set_title(r'Relative difference between average recovered $C_\ell$ and input values')
         fig3.colorbar(cmap, label=r'$f_\textrm{sky}$')
         fig3.tight_layout()
+        fig3.savefig(fig_path + 'ClRelDiff' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the moving average of the relative difference
-        fig3, ax3 = plt.subplots(figsize=(13, 7))
-        for mask_num in range(1, 12):
+        fig3, ax3 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, mask_max):
             ax3.semilogx(self.ells[1:-1], mean_cls_avg['Mask' + str(mask_num)],
                          lw=2, label=r'Mask num ' + str(mask_num),
                          c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
@@ -1103,7 +1113,7 @@ class CambObject:
 
         # * Plot of the sum of the differences for different f_sky
         fig3, ax3 = plt.subplots(figsize=fig_size)
-        for idx, mask_num in enumerate(range(1, MASK_MAX)):
+        for idx, mask_num in enumerate(range(1, mask_max)):
             ax3.plot(self.masks_f_sky[idx],
                      np.sum(np.array(mean_cls['Mask' + str(mask_num)]) / self.c_ells['W4xW4'][2:] - 1), 'x',
                      lw=2, label=r'Mask num ' + str(mask_num),
@@ -1118,7 +1128,7 @@ class CambObject:
 
         # * Plot of the sum of the squared-residuals for different f_sky
         fig3, ax3 = plt.subplots(figsize=fig_size)
-        for idx, mask_num in enumerate(range(1, MASK_MAX)):
+        for idx, mask_num in enumerate(range(1, mask_max)):
             ax3.plot(self.masks_f_sky[idx],
                      np.sum((np.array(mean_cls['Mask' + str(mask_num)]) / self.c_ells['W4xW4'][2:] - 1) ** 2), 'x',
                      lw=2, label=r'Mask num ' + str(mask_num),
@@ -1132,8 +1142,8 @@ class CambObject:
         fig3.savefig(fig_path + 'SumRelDiffSq' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the skew
-        fig4, ax4 = plt.subplots(figsize=(13, 7))
-        for mask_num in range(1, 12):
+        fig4, ax4 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, mask_max):
             ax4.semilogx(self.ells, skew_cls['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
                          c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
@@ -1146,9 +1156,10 @@ class CambObject:
         fig4.savefig(fig_path + 'Skew' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the rolling average of the skew
-        fig4, ax4 = plt.subplots(figsize=(13, 7))
-        for mask_num in range(1, 12):
-            ax4.semilogx(self.ells[1:-1], skew_cls_avg['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+        fig4, ax4 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, mask_max):
+            ax4.semilogx(self.ells[1:-1], skew_cls_avg['Mask' + str(mask_num)], lw=2,
+                         label=r'Mask num ' + str(mask_num),
                          c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
         k = (2 * self.ells + 1) / 2
@@ -1161,8 +1172,8 @@ class CambObject:
         fig4.savefig(fig_path + 'Skew_MovAvg' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the kurtosis
-        fig5, ax5 = plt.subplots(figsize=(13, 7))
-        for mask_num in range(1, 12):
+        fig5, ax5 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, mask_max):
             ax5.semilogx(self.ells, kurt_cls['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
                          c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
@@ -1175,9 +1186,10 @@ class CambObject:
         fig5.savefig(fig_path + 'Kurt' + self.fig_ext, bbox_inches='tight')
 
         # * Plot of the moving average of the kurtosis
-        fig5, ax5 = plt.subplots(figsize=(13, 7))
-        for mask_num in range(1, 12):
-            ax5.semilogx(self.ells[1:-1], kurt_cls_avg['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+        fig5, ax5 = plt.subplots(figsize=fig_size)
+        for mask_num in range(1, mask_max):
+            ax5.semilogx(self.ells[1:-1], kurt_cls_avg['Mask' + str(mask_num)], lw=2,
+                         label=r'Mask num ' + str(mask_num),
                          c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
         plt.semilogx(self.ells, 6 / k, color='cyan', ls='--', lw=3, label=r'$\Gamma$ function prediction')
@@ -1203,9 +1215,7 @@ class CambObject:
             None
         """
 
-        # Here, the data variable is a list of DataFrames for different masks. In order to access it from the "animate"
-        # function below, we need to make it global here
-        global data
+        # Here, the data variable is a list of DataFrames for different masks.
         data = []
 
         # Go through each mask
@@ -1226,7 +1236,7 @@ class CambObject:
 
                 # Only want to compute samples where ell2 < ell1
                 for ell2, c_ells2 in data_df.items():
-                    if int(ell2) >= int(ell1):
+                    if int(ell2) > ell_max:  # >= int(ell1):
                         continue
 
                     # Use the Pearson test to get correlation coefficient
