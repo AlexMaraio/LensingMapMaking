@@ -418,7 +418,7 @@ further decrease _f_<sub>sky</sub> the variance actually decreases. However, at 
 the variance is monotonically increasing as _f_<sub>sky</sub> decreases.  
 We can now look at the normalised variance, which is shown below.
 
-![Normalised varaince](figures/investigating_masks/small_fsky/NormVariance.png)
+![Normalised variance](figures/investigating_masks/small_fsky/NormVariance.png)
 
 If we now look at the variance of the _Cl_'s normalised by the average squared, we find that the
 increased variance over the theoretical values (shown in the dashed cyan line) scales monotonically
@@ -486,7 +486,9 @@ the Euclid mask), which gives
 Here, we can see that the perfect symmetry of the basic mask causes the odd-mode power to be vastly
 suppressed compared to the Euclid mask. Both masks feature strong increases for even multiples of 2 from 
 our original _l_ value, which again makes sense because both masks have strong(er) support at even _l_
-over odd _l_ values.
+over odd _l_ values. For _l_ values close to our input value, we see that the even modes predicted for the
+two masks are very similar, which shows that (at least for the even values) the primary features of the Euclid
+mask are simply the two large galactic and ecliptic cuts.
 
 ### Evaluating the coupling matrix
 
@@ -522,6 +524,24 @@ Here, we can see that in general the amplitude of the Cl values grow as _f_<sub>
 oscillations becoming noisier too. The values also closely follow a 1/l behaviour, which means that the raw
 Cl values follow a 1/l<sup>3</sup> pattern.
 
+### Comparing the Euclid mask to our theoretical simple theta mask
+
+Previously, we have analytically calculated the Cl values for a mask that is simply a band around the center
+of the map (which means it only varies with theta, and is constant in phi). The derived Cl's were a function
+of the regular Legendre polynomials that depended on where the mask started and stopped in the theta plane.
+These analytic values were found to agree very well with numerical results for a numerical implementation
+of this simple mask, however we now want to see how close the Euclid mask is to our simple analytic mask by
+comparing the Cl values. We expect, given that the Euclid mask has an additional cut corresponding to the
+ecliptic plane and other irregularities, that the broad features will be the same between the two, but there
+may be differences (especially at high _l_).  
+
+![Euclid mask vs theory values](figures/investigating_masks/Euclid_vs_theory.png)
+
+Note that in this plot the theory values are plotted for even-_l_ only (as the odd-_l_ values are zero), whereas
+the Euclid values are plotted for all _l_.  
+Here we see that both masks seem to follow the same general trend: they both exhibit the same 1/l pattern as
+seen before. 
+
 ## Comparing analytic and numerical covariance matrices
 
 A key part of the pseudo-Cl technique is to recover the covariance matrix between the different _l_ modes without
@@ -552,8 +572,50 @@ For a comparison, here is the difference between numerical and theoretical covar
 
 This shows no trends in the differences as the values here are just random noise. It should be noted that the
 amplitude of the absolute differences have increased between masks 1 to 9, but the relative differences
-have decreased to sub-1% level. The reason why we can't compute the fractional difference is becasue the odd-l
+have decreased to sub-1% level. The reason why we can't compute the fractional difference is because the odd-l
 modes should have (close to) zero covariance, and so taking the ratio here will dominate the plots with noise.
+
+### Differences for the Euclid mask
+
+Above, we looked at the numerical and theoretical covariance matrices where the theoretical values were
+calculated using the narrow kernel approximation, which is where we assume that we only have a narrow mask
+(and so a large _f_<sub>sky</sub>). We now want to see how accurate this approximation is for the Euclid mask,
+as we can compute the covariance matrix both ways and take their difference, just as above. This gives
+
+![Numerical vs theoretical covariance for Euclid](figures/covariance_matrix/Euclid_Cov.png)
+
+![Difference in covariance matrix for Euclid](figures/covariance_matrix/Euclid_Diff.png)
+
+Here, we can see that both methods yield pretty much the same covariance matrix. The absolute differences are
+about an order of magnitude, _at most_, smaller than the raw values themselves. This shows us that the
+narrow-kernel approximation is fine for the Euclid mask for our range of _l_ values.  
+However, to double check the exact ratios of how off the theory matrix is to the numerical one, we can take
+the ratio. To do so, we need to be careful as many of the entries in the covariance matrices are close to
+zero, and so we only want to take the ratios of values that we know to be non-zero. Here, we take the ratio
+of the diagonal elements, and elements that are on the ±1 and ±2 from the diagonal. This gives us the following
+plot
+
+![Ratios along select diagonal](figures/investigating_masks/covariance/Ratio_select.png)
+
+This shows that for the diagonal elements, the numerical and theoretical values give very good agreement, 
+with only slight differences at low and high _l_ values. This relative difference increases to a factor of 
+around ± two when considering the off-diagonal by one terms. This makes sense as the absolute values here
+will be very small, and so the effects of small numerical noise become increased here. We then note that for
+the off-diagonal by two terms seem to peak strongly for small-_l_ values, but seem to be scattered around
+zero elsewhere. This indicates that the theoretical covariance matrix deviates from the numerical one when
+at least one of the _l_ values become small.  
+We also note that the off-diagonal by one and two plots aren't perfect symmetries of each other (the off-diagonal
+by one is close, but the off-diagonal by two is far from close) which is surprising given that the covariance
+matrices should be perfectly symmetric. Indeed, the numerical covariance matrix is perfectly symmetric due to
+its construction, and so any anti-symmetry displayed in the ratio is arising from the theory matrix. We can
+quantify the anti-symmetry of the theory matrix by taking the difference between the original matrix and its
+transpose. This should give us an empty matrix of zeros, but instead gives us
+
+![Difference between theory matrix and transpose](figures/investigating_masks/covariance/Theory_antisymmetry.png)
+
+Here, we can see that the values are slightly larger on the upper right-hand side of the matrix than
+the bottom left-hand side. This slight asymmetry then causes our ratios above to be non-symmetric, which is
+what we have observed.
 
 ## Masking shear with E/B decomposition
 
@@ -572,10 +634,14 @@ then be combined to give the power spectra.
 
 ### Average power spectra
 
-Here, we first look at the EE, EB, and BB power spectra averaged over 750 runs for three masks and an unmasked
-map to see what affect masking has on the recovered signal.
+Here, we first look at the EE, EB, and BB power spectra averaged over 750 runs for three masks, and an unmasked
+map to see what affect masking has on the recovered signal. We also plot the Euclid mask, which is shown in the
+light blue line throughout these plots.
 
 ![Covariance animation](figures/ShearEB/EE_Cl.png)
+
+In the following two plots, the dashed cyan line corresponds to 1% of the EE signal, which allows us to see
+how important the recovered EB and BB signal is to the pure EE signal.
 
 ![Covariance animation](figures/ShearEB/EB_Cl.png)
 
@@ -587,7 +653,18 @@ algorithm. However, as we decrease _f_<sub>sky</sub> even by just a little, we s
 jump in amplitude of the BB signal, which would suggest that there is an actual signal here, and not just
 numerical noise. This BB signal then grows as we decrease _f_<sub>sky</sub> further, which suggests that the
 effect of masking is to introduce a phantom BB signal that is not there on the full-sky. This behaviour is
-mimicked in the EB signal.
+mimicked in the EB signal.  
+We also see that for the EB signal for the Euclid mask, the recovered power is larger than our 1% cut for
+_l_ values less than about one hundred. This indicates that the EB mode is non-negligible below this _l_ value,
+and becomes less important above this. We see the same pattern in the BB mode, however now the point
+where the two signals cross is around a factor of two larger, at around 250. We can separately plot the
+EE, EB, and BB signal for just the Euclid mask (along with the 1% cut) to see in detail how important this
+power-mixing is:
+
+![Euclid mask modes](figures/ShearEB/Euclid_Cl.png)
+
+This clearly shows that at low _l_ the recovered EB and BB signals are non-negligible and need to be taken
+into account when performing analysis.
 
 Note that as the EB signal can be positive or negative, we use the root-mean-square of the signal at each _l_,
 instead of the mean as that correctly deals with the sign flips, as we mostly care about the amplitude of the
@@ -649,7 +726,7 @@ not know, and so we need to marginalise over all of these at once. To go from a 
 cosmological parameters is quite a complex task, so let us extend to two parameters here, which can then be
 further generalised later.
 
-As the above liklelihood calculations focused on A_s, it was natural to extend them to include the scalar spectral
+As the above likelihood calculations focused on A_s, it was natural to extend them to include the scalar spectral
 index n_s too. This then gives us a 2D likelihood contour, as we can simply evaluate it over a grid of (A_s, n_s)
 values. This isn't the most efficient method, however is the simplest to code up. The results of this are
 
@@ -658,7 +735,16 @@ values. This isn't the most efficient method, however is the simplest to code up
 Here, we can see that the likelihood values generally form bands, where an increase in A_s leads to a decrease
 in n_s, for the same likelihood value. We have also labelled the maximum-likelihood point (the pink cross) and
 the true values for the map (the purple cross). We can see that these two values are quite close, which shows
-that our 2D likelihood code is still capable of recovering cosmological parameters from a map, even in 2D.
+that our 2D likelihood code is still capable of recovering cosmological parameters from a map, even in 2D.  
+We have also added two contours that represent the 68 and 95-th percentiles of the likelihood data. These values
+were obtained by plotting the likelihood values on a 1D histogram, and then extracting the confidence intervals
+from that:
+
+![1D likelihood histogram](figures/Likelihoods/Likelihood_histogram.png)
+
+Looking back at the 2D contour map, we can see that the two dashed contours are very loose constraints on the
+joint A_s-n_s values, primarily due to the apparent degeneracy between the lensing power spectrum as A_s increases
+and n_s decreases.
 
 #### Slices of the 2D likelihood
 
@@ -678,4 +764,95 @@ likelihood point for our three curves above, which gives
 
 Here, we can see that for low _l_ (less than around one hundred) the three models predict quite different values
 for the lensing power spectrum. However, above this point they all start to converge to the same curve which
-is where the degeneracy in the likelihoods comes from.
+is where the degeneracy in the likelihoods' comes from.
+
+#### A_s - n_s contours with masking
+
+The contours for the likelihood values in the A_s - n_s plane were for convergence maps with no masking, and so
+we can ask if masking the map before recovering the Cl values (with the Euclid mask) changes the values
+significantly. Doing so resulted in finding that neither the A_s or n_s values were changed to three
+significant figures, and so we can be confident that masking does not change the final results much (at least
+in our basic scenario). However, we can look at _how_ the likelihood changes when masking, which is through
+taking the difference between the two sets of values. This gives us the plot of
+
+![Difference induced when masking in the likelihoods](figures/Likelihoods/MaskDiff.png)
+
+This shows that the likelihood changes most for small values of A_s and n_s, when the amplitude of the
+lensing power spectrum is at its smallest.
+
+### An MCMC analysis of the A_s - n_s plane
+
+In our above analysis, we used our likelihood code to simply evaluate the likelihood on a grid of (A_s, n_s)
+values to then extract the maximum-likelihood point, and to see how the contours where shaped. However, we can
+go further than this by embedding this likelihood in an external Monte Carlo Markov Chain (MCMC) analysis
+pipeline to find the optimal constraints on the parameters, given our likelihood, and proper analysis
+of the posterior distributions. To do so, the likelihood code was converted into a small standalone Cosmosis
+module, which then allowed us to use the standard Cosmosis samplers to probe the parameter space in the
+most efficient way possible. Here, we used the basic Metropolis-Hastings algorithm as while it may not be
+the most efficient MCMC sampler, it is one of the easiest to use.
+
+The sampler was then run using 25,000 sample points to obtain good distributions of the posterior, which was
+then passed into the GetDist analysis software to produce a triangle plot of
+
+![Triangle plot 1](figures/Likelihoods/TrianglePlot.png)
+
+Here, we can see the strong inverse degeneracy between A_s and n_s values, as seen in the raw likelihood
+contours. We also note the nice nearly Gaussian 1D marginal distributions for A_s and n_s. From GetDist, the
+1D marginal constraints on A_s were (2.088 ± 0.012) x10<sup>-9</sup> and n_s were (0.9670 ± 0.0050). Clearly
+these are very tightly constrained parameters, which makes sense given what we know about the likelihood.
+
+#### Extending the MCMC to three parameters
+
+Now that we have a working MCMC pipeline to estimate two parameters, we can try to extend this to more parameters,
+in this case by sampling over the Hubble constant H0. This then gives us three parameters, of which the triangle
+plot for the run gave
+
+![Triangle plot 2](figures/Likelihoods/TriangleH0.png)
+
+This now gives some very interesting results when we compare our three parameter run to our two parameter run.
+We note that the A_s and n_s values seem to be biased to lower values than their true value, and that the
+H0 value is larger than the true value. We also note that none of the 95% contours overlap with the true values
+for any of the parameter combinations. The best-fit parameters here are: A_s of (1.96 ± 0.06) x10<sup>-9</sup>,
+n_s of (0.925 ± 0.012), and H0 of (73.5 ± 1.2) km/s/Mpc.  
+These results show that a smarter likelihood and sampler code is needed when we want to eventually extend this to 
+the number of parameters eventually required (approximately ten).
+
+### Investigating parameter bias when masking and adding noise
+
+In the real world, our maps that we want to estimate cosmological parameters from will be masked and include
+noise. Hence, when we try to simulate recovering parameters from maps, we should do so from maps that have
+been masked and have noise added that would reflect the real masking and noise. We can then compare the
+parameter estimations from our maps with and without noise, and with and without masking. This allows
+us to see in detail how each effect affects the recovered parameters in a controlled manor.  
+Furthermore, we have been dealing entirely with convergence maps so far, which is not the case for the real
+world applications where we will be using the EE mode of the shear signal. Hence, we want to compare how
+using shear could lead to different parameters over using convergence, especially when masking and noise
+are involved.
+
+The same 1D likelihood code was re-used here to compute the likelihoods for our four cases for the
+simulated convergence signal, which gives
+
+![A_s likelihood values for convergence](figures/Likelihoods/As_kk.png)
+
+The same was done to simulate the EE-mode shear signal, which gave the following likelihoods
+
+![A_s likelihood values for shear](figures/Likelihoods/As_EE.png)
+
+These two plots look very much the same, which suggests that as the EE shear signal tends to the convergence
+signal at large-_l_, this causes negligible parameter biasing as the likelihood calculation is weighted towards
+larger-_l_ values. We have also seen that masking the shear signal  
+
+| Map      | Recovered A_s value |
+| ----------- | ----------- |
+| Unmasked no noise convergence | 2.16162e-09 |
+| Unmasked no noise shear | 2.16163e-09 |
+| Unmasked with noise convergence | 2.16069e-09 |
+| Unmasked with noise shear | 2.16070e-09 |
+| Masked no noise convergence |  2.16192e-09 |
+| Masked no noise shear | 2.16193e-09 |
+| Masked with noise convergence |  2.15930e-09 |
+| Masked with noise shear | 2.15931e-09 |
+
+Note that the "true" value for the map is 2.1E-9, and so the masked with noise maps technically predict the 
+"best" A_s value, however it is true to say that these are also the most biased parameters in regards to
+the unmasked with no noise maps.
