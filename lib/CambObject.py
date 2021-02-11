@@ -3134,6 +3134,8 @@ class CambObject:
         # List which our Cl values will get stored into
         cl_vals = []
 
+        print('Evaluating power spectrum on A_s values')
+
         # Go through each A_s value, compute the lensing power spec, and save to the list.
         for a_s in a_s_vals:
             params.InitPower.set_params(As=a_s, ns=0.96)
@@ -3142,74 +3144,148 @@ class CambObject:
 
             cls = results.get_source_cls_dict()
 
-            cl_vals.append(cls['W1xW1'][2:lmax+1])
+            cl_vals.append(cls['W1xW1'][2:lmax + 1])
 
         # Now we want to spline the power spectrum at each ell to get this as a function of A_s.
         # This allows us to predict the power spectra at arbitrary ell.
         splines = []
+
+        print('Evaluating splines')
 
         for ell_idx in range(len(ells)):
             splines.append(sciinterp.InterpolatedUnivariateSpline(a_s_vals,
                                                                   [cl_vals[a_s_idx][ell_idx] for a_s_idx in
                                                                    range(len(a_s_vals))]))
 
+        print('Reading in convergence & shear maps')
+
         # Read in the unmasked convergence map that was created with A_s = 2.25E-9 and m_nu = 0.12
-        converg_map = hp.read_map(self.folder_path + 'KappaGammaMap-f2z2.fits', verbose=False, field=0)
+        converg_map, gamma1_map, gamma2_map = hp.read_map(self.folder_path + 'KappaGammaMap-f2z2.fits', verbose=True,
+                                                          field=None)
 
-        # Add the random shape noise to our convergence map
+        # Add the random shape noise to our maps
         converg_map_noise = converg_map + random_noise
+        gamma1_map_noise = gamma1_map + random_noise
+        gamma2_map_noise = gamma2_map + random_noise
 
-        # Convert to C_ells
-        converg_cls = np.array(hp.anafast(converg_map, lmax=lmax)[2:])
+        # Convert the unmasked maps to C_ells
+        converg_cls, shear_cls = hp.anafast([converg_map, gamma1_map, gamma2_map], lmax=lmax, nspec=2)[:, 2:]
         converg_cls = ells * (ells + 1) * converg_cls / (2 * np.pi)
+        shear_cls = ells * (ells + 1) * shear_cls / (2 * np.pi)
 
-        converg_cls_noise = np.array(hp.anafast(converg_map_noise, lmax=lmax)[2:])
+        converg_cls_noise, shear_cls_noise = hp.anafast([converg_map_noise, gamma1_map_noise, gamma2_map_noise],
+                                                        lmax=lmax, nspec=2)[:, 2:]
         converg_cls_noise = ells * (ells + 1) * converg_cls_noise / (2 * np.pi)
+        shear_cls_noise = ells * (ells + 1) * shear_cls_noise / (2 * np.pi)
 
+        print('Reading in the Euclid mask')
         # Read in the Euclid-like mask
         euclid_mask = hp.read_map('./resources/Euclid_masks/Euclid-gal-mask-2048.fits', verbose=False).astype(
-                np.bool)
+            np.bool)
         sky_fraction = euclid_mask.sum() / euclid_mask.size
 
-        # Read in our mask that has a crazy small f_sky
-        mask2 = hp.read_map(self.folder_path + 'Masks/Mask1.fits', verbose=False).astype(np.bool)
-        sky_fraction2 = mask2.sum() / mask2.size
+        print('Masking the convergence & shear maps')
 
-        masked_map = hp.ma(converg_map)
-        masked_map.mask = np.logical_not(euclid_mask)
+        # Mask the convergence map
+        masked_converg_map = hp.ma(converg_map)
+        masked_converg_map.mask = np.logical_not(euclid_mask)
 
-        masked_map_noise = hp.ma(converg_map_noise)
-        masked_map_noise.mask = np.logical_not(euclid_mask)
+        # Mask the shear maps
+        masked_gamma1_map = hp.ma(gamma1_map)
+        masked_gamma2_map = hp.ma(gamma2_map)
+        masked_gamma1_map.mask = np.logical_not(euclid_mask)
+        masked_gamma2_map.mask = np.logical_not(euclid_mask)
 
-        masked_map2 = hp.ma(converg_map)
-        masked_map2.mask = np.logical_not(mask2)
+        # Mask the convergence map with noise
+        masked_converg_map_noise = hp.ma(converg_map_noise)
+        masked_converg_map_noise.mask = np.logical_not(euclid_mask)
+
+        # Mask the shear maps with noise
+        masked_gamma1_map_noise = hp.ma(gamma1_map_noise)
+        masked_gamma2_map_noise = hp.ma(gamma2_map_noise)
+        masked_gamma1_map_noise.mask = np.logical_not(euclid_mask)
+        masked_gamma2_map_noise.mask = np.logical_not(euclid_mask)
+
+        print('Turning maps into power spectra')
 
         # Obtain masked Cl's for both masks
-        masked_cls = np.array(hp.anafast(masked_map, lmax=lmax)[2:])
-        masked_cls = ells * (ells + 1) * masked_cls / (2 * np.pi) / sky_fraction
+        masked_converg_cls, masked_shear_cls = hp.anafast([masked_converg_map, masked_gamma1_map, masked_gamma2_map],
+                                                          lmax=lmax, nspec=2)[:, 2:]
+        masked_converg_cls = ells * (ells + 1) * masked_converg_cls / (2 * np.pi) / sky_fraction
+        masked_shear_cls = ells * (ells + 1) * masked_shear_cls / (2 * np.pi) / sky_fraction
 
-        masked_cls_noise = np.array(hp.anafast(masked_map_noise, lmax=lmax)[2:])
-        masked_cls_noise = ells * (ells + 1) * masked_cls_noise / (2 * np.pi) / sky_fraction
+        masked_converg_cls_noise, masked_shear_cls_noise = hp.anafast(
+            [masked_converg_map_noise, masked_gamma1_map_noise, masked_gamma2_map_noise], lmax=lmax, nspec=2)[:, 2:]
+        masked_converg_cls_noise = ells * (ells + 1) * masked_converg_cls_noise / (2 * np.pi) / sky_fraction
+        masked_shear_cls_noise = ells * (ells + 1) * masked_shear_cls_noise / (2 * np.pi) / sky_fraction
 
-        masked_cls2 = np.array(hp.anafast(masked_map2, lmax=lmax)[2:])
-        masked_cls2 = ells * (ells + 1) * masked_cls2 / (2 * np.pi) / sky_fraction2
+        print('Plotting power spectra')
 
+        # Compute the "true" values for the convergence and shear signals, with no noise and masking
+        true_converg = np.array([splines[ell](2.1E-9) for ell in range(len(ells))])
+        true_shear = (ells + 2) * (ells - 1) / (ells * (ells + 1)) * true_converg
+
+        # Plot the different convergence signals
+        plt.figure(figsize=(11, 6))
+        plt.loglog(ells, true_converg,
+                   lw=1.5, ls='-', c='cornflowerblue', label=r'True convergence')
         plt.loglog(ells, converg_cls,
-                   lw=1, ls='-', c='tab:blue', label=r'$C_\ell$ recovered from full map')
-        plt.loglog(ells, masked_cls,
-                   lw=1, ls='-', c='orange', label=r'$C_\ell$ with Euclid mask')
-        plt.loglog(ells, masked_cls2,
-                   lw=1, ls='-', c='hotpink', label=r'$C_\ell$ with mask 2')
+                   lw=1, ls='-', c='tab:blue', label=r'No mask no noise')
+        plt.loglog(ells, converg_cls_noise,
+                   lw=1, ls='-', c='orange', label=r'No mask with noise')
+        plt.loglog(ells, masked_converg_cls,
+                   lw=1, ls='-', c='hotpink', label=r'With mask no noise')
+        plt.loglog(ells, masked_converg_cls_noise,
+                   lw=1, ls='-', c='purple', label=r'With mask and noise')
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell (\ell + 1) C_\ell^{\kappa \kappa} / 2 \pi$')
+        plt.legend()
+        plt.tight_layout()
+
+        # Plot the shear signals
+        plt.figure(figsize=(11, 6))
+        plt.loglog(ells, true_shear,
+                   lw=1.5, ls='-', c='cornflowerblue', label=r'True shear')
+        plt.loglog(ells, shear_cls,
+                   lw=1, ls='-', c='tab:blue', label=r'No mask no noise')
+        plt.loglog(ells, shear_cls_noise,
+                   lw=1, ls='-', c='orange', label=r'No mask with noise')
+        plt.loglog(ells, masked_shear_cls,
+                   lw=1, ls='-', c='hotpink', label=r'With mask no noise')
+        plt.loglog(ells, masked_shear_cls_noise,
+                   lw=1, ls='-', c='purple', label=r'With mask and noise')
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell (\ell + 1) C_\ell^{EE} / 2 \pi$')
+        plt.legend()
+        plt.tight_layout()
+
+        # Plot the true values of the convergence and shear
+        plt.figure(figsize=(11, 6))
+        plt.loglog(ells, true_converg,
+                   lw=1, ls='-', c='tab:blue', label=r'True convergence')
+        plt.loglog(ells, true_shear,
+                   lw=1, ls='-', c='orange', label=r'True shear')
+
+        plt.xlabel(r'$\ell$')
+        plt.ylabel(r'$\ell (\ell + 1) C_\ell^{ii} / 2 \pi$')
+        plt.legend()
+        plt.tight_layout()
+
         plt.show()
 
         # Now we want to evaluate the likelihood for a range of A_s values to find the maximum-likelihood value
-        a_s_vals = np.linspace(a_s_center - 5E-12, a_s_center + 5E-12, 250)
+        a_s_vals = np.linspace(a_s_center - 3.5E-12, a_s_center + 2.5E-12, 250)
 
         # Likelihood for our unmasked, Euclid mask, and custom mask
-        likelihoods1 = []
-        likelihoods2 = []
-        likelihoods3 = []
-        likelihoods4 = []
+        likelihoods1_converg = []
+        likelihoods2_converg = []
+        likelihoods3_converg = []
+        likelihoods4_converg = []
+
+        likelihoods1_shear = []
+        likelihoods2_shear = []
+        likelihoods3_shear = []
+        likelihoods4_shear = []
 
         for a_s in a_s_vals:
             cl_theory = np.array([splines[ell](a_s) for ell in range(len(ells))])
@@ -3223,27 +3299,58 @@ class CambObject:
                                                 converg_cls_noise / (cl_theory + theory_cl_noise)))
 
             # Masked map without noise
-            log_lik3 = np.sum((2 * ells + 1) * (np.log(cl_theory) + masked_cls / cl_theory ))
+            log_lik3 = np.sum((2 * ells + 1) * (np.log(cl_theory) + masked_converg_cls / cl_theory))
 
             # Masked map with noise
             log_lik4 = np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise)
-                                                + masked_cls_noise / (cl_theory + theory_cl_noise)))
+                                                + masked_converg_cls_noise / (cl_theory + theory_cl_noise)))
 
-            likelihoods1.append(log_lik)
-            likelihoods2.append(log_lik2)
-            likelihoods3.append(log_lik3)
-            likelihoods4.append(log_lik4)
+            likelihoods1_converg.append(log_lik)
+            likelihoods2_converg.append(log_lik2)
+            likelihoods3_converg.append(log_lik3)
+            likelihoods4_converg.append(log_lik4)
 
-        # Now compute the global minima of the likelihoods1, to find the maximum-likelihood value of A_s
-        cr_pts1 = self.global_minima(a_s_vals, likelihoods1)
-        cr_pts2 = self.global_minima(a_s_vals, likelihoods2)
-        cr_pts3 = self.global_minima(a_s_vals, likelihoods3)
-        cr_pts4 = self.global_minima(a_s_vals, likelihoods4)
+            # Now turn the convergence Cl's into EE
+            cl_theory = (ells + 2) * (ells - 1) / (ells * (ells + 1)) * cl_theory
 
-        print(f'Unmasked no noise A_s: {cr_pts1:.4e}')
-        print(f'Unmasked with noise A_s: {cr_pts2:.4e}')
-        print(f'Masked no noise A_s: {cr_pts3:.4e}')
-        print(f'Masked with noise A_s: {cr_pts4:.4e}')
+            log_lik = np.sum((2 * ells + 1) * (np.log(cl_theory) + converg_cls / cl_theory))
+
+            # Unmasked map with noise
+            log_lik2 = np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise) +
+                                                converg_cls_noise / (cl_theory + theory_cl_noise)))
+
+            # Masked map without noise
+            log_lik3 = np.sum((2 * ells + 1) * (np.log(cl_theory) + masked_converg_cls / cl_theory))
+
+            # Masked map with noise
+            log_lik4 = np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise)
+                                                + masked_converg_cls_noise / (cl_theory + theory_cl_noise)))
+
+            likelihoods1_shear.append(log_lik)
+            likelihoods2_shear.append(log_lik2)
+            likelihoods3_shear.append(log_lik3)
+            likelihoods4_shear.append(log_lik4)
+
+        # Now compute the global minima of the likelihoods1_converg, to find the maximum-likelihood value of A_s
+        cr_pts1_cn = self.global_minima(a_s_vals, likelihoods1_converg)
+        cr_pts2_cn = self.global_minima(a_s_vals, likelihoods2_converg)
+        cr_pts3_cn = self.global_minima(a_s_vals, likelihoods3_converg)
+        cr_pts4_cn = self.global_minima(a_s_vals, likelihoods4_converg)
+
+        print(f'Unmasked no noise convergence \t A_s: {cr_pts1_cn:.5e}')
+        print(f'Unmasked with noise convergence  A_s: {cr_pts2_cn:.5e}')
+        print(f'Masked no noise convergence \t A_s: {cr_pts3_cn:.5e}')
+        print(f'Masked with noise convergence \t A_s: {cr_pts4_cn:.5e}\n')
+
+        cr_pts1_sh = self.global_minima(a_s_vals, likelihoods1_shear)
+        cr_pts2_sh = self.global_minima(a_s_vals, likelihoods2_shear)
+        cr_pts3_sh = self.global_minima(a_s_vals, likelihoods3_shear)
+        cr_pts4_sh = self.global_minima(a_s_vals, likelihoods4_shear)
+
+        print(f'Unmasked no noise shear \t A_s: {cr_pts1_sh:.5e}')
+        print(f'Unmasked with noise shear \t A_s: {cr_pts2_sh:.5e}')
+        print(f'Masked no noise shear \t\t A_s: {cr_pts3_sh:.5e}')
+        print(f'Masked with noise shear \t A_s: {cr_pts4_sh:.5e}\n')
 
         # * Plot the likelihood as a function of A_s
         # Note that we have to used a zoomed in sub-plot as the lines aren't separated by much
@@ -3286,36 +3393,108 @@ class CambObject:
         fig.tight_layout()
         """
 
+        likelihoods1_converg = np.array(likelihoods1_converg)
+        likelihoods2_converg = np.array(likelihoods2_converg)
+        likelihoods3_converg = np.array(likelihoods3_converg)
+        likelihoods4_converg = np.array(likelihoods4_converg)
+
+        likelihoods1_shear = np.array(likelihoods1_shear)
+        likelihoods2_shear = np.array(likelihoods2_shear)
+        likelihoods3_shear = np.array(likelihoods3_shear)
+        likelihoods4_shear = np.array(likelihoods4_shear)
+
+        min_val1_cn = np.min(likelihoods1_converg)
+        a_s_center1_cn = a_s_vals[np.argmin(likelihoods1_converg)]
+
+        min_val2_cn = np.min(likelihoods2_converg)
+        a_s_center2_cn = a_s_vals[np.argmin(likelihoods2_converg)]
+
+        min_val3_cn = np.min(likelihoods3_converg)
+        a_s_center3_cn = a_s_vals[np.argmin(likelihoods3_converg)]
+
+        min_val4_cn = np.min(likelihoods4_converg)
+        a_s_center4_cn = a_s_vals[np.argmin(likelihoods4_converg)]
+
+        # Now do the same for shear
+        min_val1_sh = np.min(likelihoods1_shear)
+        a_s_center1_sh = a_s_vals[np.argmin(likelihoods1_shear)]
+
+        min_val2_sh = np.min(likelihoods2_shear)
+        a_s_center2_sh = a_s_vals[np.argmin(likelihoods2_shear)]
+
+        min_val3_sh = np.min(likelihoods3_shear)
+        a_s_center3_sh = a_s_vals[np.argmin(likelihoods3_shear)]
+
+        min_val4_sh = np.min(likelihoods4_shear)
+        a_s_center4_sh = a_s_vals[np.argmin(likelihoods4_shear)]
+
+        # First plot the log-likelihood values
         fig, ax = plt.subplots(figsize=(13, 7))
 
-        likelihoods1 = np.array(likelihoods1)
-        likelihoods2 = np.array(likelihoods2)
-        likelihoods3 = np.array(likelihoods3)
-        likelihoods4 = np.array(likelihoods4)
+        ax.plot(a_s_vals, likelihoods1_converg - min_val1_cn, c='tab:blue', label='Unmasked no noise')
+        ax.plot(a_s_vals, likelihoods2_converg - min_val2_cn, c='orange', label='Unmasked with noise')
+        ax.plot(a_s_vals, likelihoods3_converg - min_val3_cn, c='hotpink', label='Masked no noise', ls='--')
+        ax.plot(a_s_vals, likelihoods4_converg - min_val4_cn, c='purple', label='Masked with noise', ls='--')
 
-        min_val1 = np.min(likelihoods1)
-        a_s_center1 = a_s_vals[np.argmin(likelihoods1)]
+        ax.set_xlabel(r'$A_\textsc{s}$')
+        ax.set_ylabel(r'$\ln \mathcal{L} - \textrm{Min}[\ln \mathcal{L}]$')
+        ax.set_title(r'Normalised Log-likelihoods values for convergence-$\kappa\kappa$')
+        plt.legend()
+        plt.tight_layout()
 
-        min_val2 = np.min(likelihoods2)
-        a_s_center2 = a_s_vals[np.argmin(likelihoods2)]
+        # Plot the log-likelihood values for shear
+        fig, ax = plt.subplots(figsize=(13, 7))
 
-        min_val3 = np.min(likelihoods3)
-        a_s_center3 = a_s_vals[np.argmin(likelihoods3)]
+        ax.plot(a_s_vals, likelihoods1_shear - min_val1_sh, c='tab:blue', label='Unmasked no noise')
+        ax.plot(a_s_vals, likelihoods2_shear - min_val2_sh, c='orange', label='Unmasked with noise')
+        ax.plot(a_s_vals, likelihoods3_shear - min_val3_sh, c='hotpink', label='Masked no noise', ls='--')
+        ax.plot(a_s_vals, likelihoods4_shear - min_val4_sh, c='purple', label='Masked with noise', ls='--')
 
-        min_val4 = np.min(likelihoods4)
-        a_s_center4 = a_s_vals[np.argmin(likelihoods4)]
+        ax.set_xlabel(r'$A_\textsc{s}$')
+        ax.set_ylabel(r'$\ln \mathcal{L} - \textrm{Min}[\ln \mathcal{L}]$')
+        ax.set_title(r'Normalised Log-likelihoods values for shear-$EE$')
+        plt.legend()
+        plt.tight_layout()
 
-        ax.plot(a_s_vals - a_s_center1, np.exp(likelihoods1 - min_val1), c='tab:blue', label='Unmasked no noise')
-        ax.plot(a_s_vals - a_s_center2, np.exp(likelihoods2 - min_val2), c='orange', label='Unmasked with noise')
-        ax.plot(a_s_vals - a_s_center3, np.exp(likelihoods3 - min_val3), c='hotpink', label='Masked no noise', ls='--')
-        ax.plot(a_s_vals - a_s_center4, np.exp(likelihoods4 - min_val4), c='purple', label='Masked with noise', ls='--')
+        # Now plot the normalised likelihood for convergence
+        fig, ax = plt.subplots(figsize=(13, 7))
+
+        ax.plot(a_s_vals - a_s_center1_cn, np.exp(likelihoods1_converg - min_val1_cn), c='tab:blue',
+                label='Unmasked no noise')
+        ax.plot(a_s_vals - a_s_center2_cn, np.exp(likelihoods2_converg - min_val2_cn), c='orange',
+                label='Unmasked with noise')
+        ax.plot(a_s_vals - a_s_center3_cn, np.exp(likelihoods3_converg - min_val3_cn), c='hotpink',
+                label='Masked no noise', ls='--')
+        ax.plot(a_s_vals - a_s_center4_cn, np.exp(likelihoods4_converg - min_val4_cn), c='purple',
+                label='Masked with noise', ls='--')
 
         ax.set_xlim(left=-2E-12, right=2E-12)
         ax.set_ylim(bottom=0.8, top=9.1)
 
         ax.set_xlabel(r'$A_\textsc{s} - A_\textsc{s}^\textsc{ml}$')
         ax.set_ylabel(r'$\sim -\mathcal{L}$')
-        ax.set_title(r'Normalised likelihoods where $\textrm{Min}[\mathcal{L}] = 1$')
+        ax.set_title(r'Normalised likelihoods where $\textrm{Min}[\mathcal{L}] = 1$ for convergence-$\kappa\kappa$')
+        plt.legend()
+        plt.tight_layout()
+
+        # Now plot the normalised likelihood for shear
+        fig, ax = plt.subplots(figsize=(13, 7))
+
+        ax.plot(a_s_vals - a_s_center1_sh, np.exp(likelihoods1_shear - min_val1_sh), c='tab:blue',
+                label='Unmasked no noise')
+        ax.plot(a_s_vals - a_s_center2_sh, np.exp(likelihoods2_shear - min_val2_sh), c='orange',
+                label='Unmasked with noise')
+        ax.plot(a_s_vals - a_s_center3_sh, np.exp(likelihoods3_shear - min_val3_sh), c='hotpink',
+                label='Masked no noise', ls='--')
+        ax.plot(a_s_vals - a_s_center4_sh, np.exp(likelihoods4_shear - min_val4_sh), c='purple',
+                label='Masked with noise', ls='--')
+
+        ax.set_xlim(left=-2E-12, right=2E-12)
+        ax.set_ylim(bottom=0.8, top=9.1)
+
+        ax.set_xlabel(r'$A_\textsc{s} - A_\textsc{s}^\textsc{ml}$')
+        ax.set_ylabel(r'$\sim -\mathcal{L}$')
+        ax.set_title(r'Normalised likelihoods where $\textrm{Min}[\mathcal{L}] = 1$ for shear-$EE$')
         plt.legend()
         plt.tight_layout()
 
@@ -3359,7 +3538,7 @@ class CambObject:
 
             cls = results.get_source_cls_dict()
 
-            cl_vals.append(cls['W1xW1'][2:lmax+1])
+            cl_vals.append(cls['W1xW1'][2:lmax + 1])
 
         # Now we want to spline the power spectrum at each ell to get this as a function of m_nu.
         # This allows us to predict the power spectra at arbitrary ell.
@@ -3379,7 +3558,7 @@ class CambObject:
 
         # Read in the Euclid-like mask
         euclid_mask = hp.read_map('./resources/Euclid_masks/Euclid-gal-mask-2048.fits', verbose=False).astype(
-                np.bool)
+            np.bool)
         sky_fraction = euclid_mask.sum() / euclid_mask.size
 
         # Read in our mask that has a crazy small f_sky
