@@ -4199,8 +4199,8 @@ class CambObject:
 
     def simple_likelihood_as_ns(self):
         """
-        Function that implements a very simple likelihood code that tries to find the join parameter constraints on
-        As and ns
+        Function that implements a very simple likelihood code that tries to find the joint parameter constraints on
+        A_s and n_s
 
         Returns:
             None
@@ -4229,7 +4229,8 @@ class CambObject:
         # Include the l(l+1) / 2pi factor in the Cl valeus
         theory_cl_noise = ells * (ells + 1) * theory_cl_noise / (2 * np.pi)
 
-        theory_cl_noise = np.zeros(lmax-1)
+        # Optionally use no theory noise, and set all values to zero
+        theory_cl_noise = np.zeros(lmax - 1)
 
         # Initiate a LCDM cosmology
         params = camb.CAMBparams()
@@ -4246,8 +4247,8 @@ class CambObject:
         params.SourceWindows = [GaussianSourceWindow(redshift=2, source_type='lensing', sigma=0.05)]
 
         # The range of A_s values that we want to compute the power spectrum at
-        a_s_vals = np.linspace(1.5e-9, 5e-9, 5)
-        n_s_vals = np.linspace(0.6, 1.4, 10)
+        a_s_vals = np.linspace(1.5e-9, 4e-9, 10)
+        n_s_vals = np.linspace(0.7, 1.3, 10)
 
         # List which our Cl values will get stored into
         data_dict = {'As': [], 'ns': [], 'Cl': []}
@@ -4265,7 +4266,7 @@ class CambObject:
 
                 data_dict['As'].append(a_s)
                 data_dict['ns'].append(n_s)
-                data_dict['Cl'].append(cls['W1xW1'][2:lmax+1])
+                data_dict['Cl'].append(cls['W1xW1'][2:lmax + 1])
 
         print('Evaluate the splines now')
 
@@ -4283,21 +4284,39 @@ class CambObject:
             splines.append(spline_func(a_s_vals, n_s_vals, np.reshape(c_l_arr, (len(a_s_vals), len(n_s_vals)))))
 
         # Read in the unmasked convergence map that was created with A_s = 2.25E-9 and m_nu = 0.12
-        converg_map = hp.read_map(self.folder_path + 'KappaGammaMap-f2z2.fits', verbose=False, field=0)
+        converg_map = hp.read_map(self.folder_path + 'KappaGammaMap-f2z2.fits', verbose=True, field=0)
+
+        # Read in the Euclid mask
+        euclid_mask = hp.read_map('./resources/Euclid_masks/Euclid-gal-mask-2048.fits', verbose=False).astype(
+            np.bool)
+
+        # Compute f_sky for Euclid mask
+        f_sky = euclid_mask.sum() / euclid_mask.size
+
+        # Create masked map from convergence map and Euclid mask
+        converg_map_mask = hp.ma(converg_map)
+        converg_map_mask.mask = np.logical_not(euclid_mask)
 
         # Add the random shape noise to our convergence map
         # converg_map += random_noise
 
-        # Convert to C_ells
+        # Convert to C_ells for both unmasked and masked maps
         converg_cls = np.array(hp.anafast(converg_map, lmax=lmax)[2:])
         converg_cls = ells * (ells + 1) * converg_cls / (2 * np.pi)
 
+        converg_cls_mask = np.array(hp.anafast(converg_map_mask, lmax=lmax)[2:])
+        converg_cls_mask = ells * (ells + 1) * converg_cls_mask / (2 * np.pi)
+
+        # Normalise masked Cl through 1/f_sky
+        converg_cls_mask /= f_sky
+
         # Now we want to evaluate the likelihood for a range of A_s values to find the maximum-likelihood value
-        a_s_vals = np.linspace(1.5e-9, 5e-9, 75)
-        n_s_vals = np.linspace(0.6, 1.4, 75)
+        a_s_vals = np.linspace(1.5e-9, 4e-9, 75)
+        n_s_vals = np.linspace(0.7, 1.3, 75)
 
         # Likelihood for our unmasked, Euclid mask, and custom mask
         likelihoods = np.zeros(shape=(len(a_s_vals), len(n_s_vals)))
+        likelihoods_mask = np.zeros(shape=(len(a_s_vals), len(n_s_vals)))
 
         print('Evaluating the likelihood now')
 
@@ -4312,12 +4331,56 @@ class CambObject:
                                                         converg_cls / (cl_theory + theory_cl_noise)))
                 likelihoods[a_s_idx, n_s_idx] = log_lik
 
-        # Find what the maximum likelihood value is
+                # Compute the log-likelihood for our masked map
+                log_lik = -1 * np.sum((2 * ells + 1) * (np.log(cl_theory + theory_cl_noise) +
+                                                        converg_cls_mask / (cl_theory + theory_cl_noise)))
+                likelihoods_mask[a_s_idx, n_s_idx] = log_lik
+
+        # Find what the maximum likelihood value is for both maps
         max_idx = np.unravel_index(np.argmax(likelihoods), likelihoods.shape)
         max_as = a_s_vals[max_idx[0]]
         max_ns = n_s_vals[max_idx[1]]
 
-        print(f'Maximum likelihood point is at A_s = {max_as:.3e}, n_s = {max_ns:.3f}')
+        max_idx_mask = np.unravel_index(np.argmax(likelihoods_mask), likelihoods_mask.shape)
+        max_as_mask = a_s_vals[max_idx_mask[0]]
+        max_ns_mask = n_s_vals[max_idx_mask[1]]
+
+        print(f'Maximum likelihood point is at A_s = {max_as:.4e}, n_s = {max_ns:.4f} for the unmasked map')
+        print(f'Maximum likelihood point is at A_s = {max_as_mask:.4e}, n_s = {max_ns_mask:.4f} for the masked map')
+
+        # * Now save our 2D likelihoods for GetDist
+        # To do so, we turn our 2D array into a Pandas DataFrame
+        data_dict = {'weight': [], 'like': [], 'As': [], 'ns': []}
+
+        for a_s_idx, a_s in enumerate(a_s_vals):
+            for n_s_idx, n_s in enumerate(n_s_vals):
+                data_dict['weight'].append(1.0)
+                data_dict['like'].append(likelihoods[a_s_idx, n_s_idx])
+                data_dict['As'].append(a_s)
+                data_dict['ns'].append(n_s)
+
+        # Turn the dictionary to a dataframe and save this to disk
+        data_df = pd.DataFrame(data_dict)
+        data_df.to_csv(self.folder_path + 'GetDist/values1.txt', sep=' ', index=False)
+
+        # Remove data once done
+        del data_dict
+        del data_df
+
+        import getdist
+        from getdist import plots
+        mpl.use('Qt5Agg')
+
+        # Use GetDist to read in the samples that we've just saved - ignoring the header row
+        samples = getdist.loadMCSamples(self.folder_path + 'GetDist/values1', settings={'ignore_rows': 1})
+
+        # Create a triangle plot of the data
+        g = plots.get_subplot_plotter()
+        g.triangle_plot(samples, filled=True)
+
+        # Save the plot
+        g.export(self.folder_path + 'TrianglePlot.pdf')
+        plt.show()
 
         likelihoods_as1 = []
         likelihoods_as2 = []
@@ -4352,17 +4415,74 @@ class CambObject:
                                                     converg_cls / (cl_theory + theory_cl_noise)))
             likelihoods_as3.append(log_lik)
 
-        plt.figure()
-        plt.contourf(a_s_vals, n_s_vals, likelihoods, levels=250, cmap='viridis')
-        plt.plot(max_as, max_ns, 'x', c='hotpink', lw=4, markersize=10, label='Maximum likelihood')
-        plt.plot(2.1E-9, 0.96, 'x', c='purple', lw=4, markersize=10, label='True value')
+        # Compute percentiles
+        percent_68 = np.percentile(likelihoods.reshape(likelihoods.size), 32)
+        percent_95 = np.percentile(likelihoods.reshape(likelihoods.size), 5)
 
-        plt.xlabel(r'$A_\textrm{s}$')
-        plt.ylabel(r'$n_\textrm{s}$')
-        plt.title(r'Log-likelihood in the $A_\textrm{s} - n_\textrm{s}$ plane')
-        plt.colorbar(label=r'$\ln \mathcal{L}$')
+        print(f'68-th percentile: {percent_68:.4e}')
+        print(f'95-th percentile: {percent_95:.4e}')
+
+        # Create a 1D histogram of the likelihood values, and draw on the percentiles too
+        plt.figure()
+        sns.histplot(likelihoods.reshape(likelihoods.size), label='Unmasked data', color='tab:blue')
+        sns.histplot(likelihoods_mask.reshape(likelihoods_mask.size), label='Masked data', color='tab:pink')
+
+        plt.axvline(percent_68, c='cornflowerblue', ls='--', lw=2, label='68-th percentile')
+        plt.axvline(percent_95, c='orange', ls='--', lw=2, label='95-th percentile')
+        plt.xlabel(r'$\ln \mathcal{L}$')
         plt.legend()
         plt.tight_layout()
+
+        # Plot the contour of the likelihood values, along with the percentiles
+        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(13, 10), sharey=True)
+
+        min_val = np.min([likelihoods, likelihoods_mask])
+        max_val = np.max([likelihoods, likelihoods_mask])
+
+        # Ax1 is for the unmasked values
+        cont1 = ax1.contourf(a_s_vals, n_s_vals, likelihoods, levels=250, cmap='viridis',
+                             vmin=min_val, vmax=max_val)
+
+        c1 = ax1.contour(a_s_vals, n_s_vals, likelihoods, levels=[percent_68], colors='cornflowerblue', linestyles='--',
+                         linewidth=2)
+        c2 = ax1.contour(a_s_vals, n_s_vals, likelihoods, levels=[percent_95], colors='orange', linestyles='--',
+                         linewidth=2)
+
+        c1.collections[0].set_label('68-th percentile')
+        c2.collections[0].set_label('95-th percentile')
+
+        ax1.plot(max_as, max_ns, 'x', c='hotpink', lw=4, markersize=10, label='Maximum likelihood')
+        ax1.plot(2.1E-9, 0.96, 'x', c='purple', lw=4, markersize=10, label='True value')
+
+        # Ax2 is for the masked values
+        cont2 = ax2.contourf(a_s_vals, n_s_vals, likelihoods_mask, levels=250, cmap='viridis',
+                             vmin=min_val, vmax=max_val)
+
+        ax2.plot(max_as_mask, max_ns_mask, 'x', c='hotpink', lw=4, markersize=10)
+        ax2.plot(2.1E-9, 0.96, 'x', c='purple', lw=4, markersize=10)
+
+        fig.subplots_adjust(right=0.85)
+        cbar_ax = fig.add_axes([0.9, 0.15, 0.05, 0.7])
+        fig.colorbar(cont1, label=r'$\ln \mathcal{L}$', cax=cbar_ax)
+
+        ax1.set_xlabel(r'$A_\textrm{s}$')
+        ax2.set_xlabel(r'$A_\textrm{s}$')
+        ax1.set_ylabel(r'$n_\textrm{s}$')
+
+        ax1.set_title('Unmasked map')
+        ax2.set_title('Masked map')
+
+        fig.suptitle(r'Log-likelihoods in the $A_\textrm{s} - n_\textrm{s}$ plane')
+        fig.legend()
+
+        # * Plot the difference in likelihood between masked and unmasked maps
+        fig, ax = plt.subplots(figsize=(11, 6))
+        cont = ax.contourf(a_s_vals, n_s_vals, likelihoods - likelihoods_mask,
+                           levels=250, cmap=make_planck_colour_map())
+        ax.set_xlabel(r'$A_s$')
+        ax.set_ylabel(r'$n_s$')
+        ax.set_title(r'Difference in log-likelihood between unmasked and masked maps')
+        fig.colorbar(cont, label=r'$\ln \mathcal{L} - \ln \mathcal{L}_\textrm{mask}$', aspect=15)
 
         # Now plot the 1D-likelihoods at fixed n_s
         fig, ax = plt.subplots(figsize=(11, 6))
