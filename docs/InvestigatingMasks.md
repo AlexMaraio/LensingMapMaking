@@ -617,6 +617,52 @@ Here, we can see that the values are slightly larger on the upper right-hand sid
 the bottom left-hand side. This slight asymmetry then causes our ratios above to be non-symmetric, which is
 what we have observed.
 
+### Theory covariance asymmetry update
+
+Previously, it was found that the theory covariance matrix was slightly asymmetric when it should be perfectly
+symmetric. It was thought that this asymmetry could arise from a slight error on the computation of the
+Wigner 3-j matrix, as this was the most obvious place where something could go wrong. However, it was found that
+the mixing matrix returned from CAMB was _perfectly_ symmetric, and so the step going from the mixing matrix and
+turning this into the covariance matrix must have some error in it. To do this conversion, we need to perform 
+element-by-element multiplication of the covariance matrix with the matrix of Cl values. Previously, this was
+performed using the following line of code
+
+```python
+cov_th = 2 * self.c_ells['W4xW4'][2:lmax+1] * np.transpose(self.c_ells['W4xW4'][2:lmax+1]) * mask_matrix
+```
+
+However, upon further inspection it seems that this was doing _matrix_ multiplication between the Cl's and
+the mixing matrix. To peform the desired element-by-element multiplication, this line needed to be replaced with
+
+```python
+cov_th = 2 * self.c_ells['W4xW4'][np.newaxis, 2:lmax+1] * self.c_ells['W4xW4'][2:lmax+1, np.newaxis] * mask_matrix
+```
+
+Where we now manually insert new axes into the 1D arrays to turn them into the correct form that allows NumPy
+to perform the correct multiplication.
+
+### Computing the covariance matrix using the MASTER algorithm
+
+The MASTER algorithm is another way to compute the pseudo-Cl estimator, and so has methods to compute the 
+covariance matrix for a given mask. This allows us to compare our numerical covariance matrix and theory
+covariance matrix from CAMB to an additional method to make cross-comparisons.  
+Evaluating the covariance matrix using MASTER gave the following result
+
+![MASTER covariance matrix](figures/covariance_matrix/Master_covariance.png)
+
+Here, we can see that this result is slightly different from both our numerical estimates and the estimated
+theoretical matrix from CAMB. The maximum amplitude of the matrix is around half that of our previous results,
+and we see that there are additional negative correlations not seen before.  
+To try and see how different this covariance matrix is over our previous result, we can take the ratio of
+the MASTER matrix to our numerical result. To account for the large range of values in the covariance matrix,
+we need to take the log of the ratio, as that allows us to extract useful information from it
+
+![MASTER covariance matrix ratio](figures/covariance_matrix/Master_ratio.png)
+
+Here, we can see that along the diagonal (where most of the data lies) the ratios lie from around 10% to
+upwards of 100 times greater than the numerical version. This suggests that something in the MASTER calculation
+isn't being done correctly, and so further work will need to be done to investigate this discrepancy.
+
 ## Masking shear with E/B decomposition
 
 In all the above analysis of masks, we have been using the convergence (_κ_) maps because of their simplicity,
@@ -817,6 +863,41 @@ n_s of (0.925 ± 0.012), and H0 of (73.5 ± 1.2) km/s/Mpc.
 These results show that a smarter likelihood and sampler code is needed when we want to eventually extend this to 
 the number of parameters eventually required (approximately ten).
 
+### Improving MCMC parameter estimation using multiple redshift bins
+
+In our above MCMC analysis of recovering two and three parameters, the likelihood was only evaluated at a single
+redshift (z=2). While this is good enough to get reasonable constraints on A_s and n_s, when extended to the 
+dark energy parameters (w_0 and w_a), this simplistic approach starts to break down. This is because the dark
+energy parameters mostly affect how the lensing power spectrum evolves with redshifts, not just at a single
+slice. Hence, dark energy parameters can be optimized for a single redshift bin which do not match at all another
+one due to the very different evolution. Therefore, we can instead use multiple redshift bins to constrain this
+evolution of the power spectrum, which gives us much more optimal constraints on the dark energy parameters.
+
+For example, the 2D constraints on w_0 and w_a from using a single redshift bin are
+
+![Dark energy triangle plot, 1z only](figures/Likelihoods/TrianglePlots/w0wa_1z.png)
+
+Whereas, for two redshift bins (z=0.5 and z=2), we find the constraints tighten significantly to
+
+![Dark energy triangle plot, 2z only](figures/Likelihoods/TrianglePlots/w0wa_2z.png)
+
+Here, we can see that the constraints on both w_0 and w_a become about three times smaller when using the
+additional redshift bin over just using one. This shows the power of using the evolution of the lensing power
+spectrum, instead of just using a single realisation. This is summarised in the following table
+
+| Parameter      | One redshift bin  | One redshift bin - masked | Two redshift bins | Two redshift bins - Masked |
+| ----------- | ----------- | ---------- | ---------- | ---------- |
+| w_0 | -0.962  ± 0.030 | -0.960  ± 0.025 | -0.9955  ± 0.0073   | -0.9933  ± 0.0076 |
+| w_a| -0.136  ± 0.11 | -0.146  ± 0.090 | -0.021  ± 0.026 | -0.028  ± 0.027  |
+
+#### Using two redshift bins for A_s and n_s estimation
+
+Now that we have adapted the code to use two redshift bins instead of one, we can apply this to our basic
+example of estimating A_s and n_s. Again, doing this for masked and unmasked maps, we find the 2D contour as
+
+![A_s n_s triangle plot, 2z only](figures/Likelihoods/TrianglePlots/Asns_2z.png)
+
+
 ### Investigating parameter bias when masking and adding noise
 
 In the real world, our maps that we want to estimate cosmological parameters from will be masked and include
@@ -856,3 +937,116 @@ larger-_l_ values. We have also seen that masking the shear signal
 Note that the "true" value for the map is 2.1E-9, and so the masked with noise maps technically predict the 
 "best" A_s value, however it is true to say that these are also the most biased parameters in regards to
 the unmasked with no noise maps.
+
+### MCMC analysis including noise
+
+Above, we have looked at our 1D likelihood case where we have added noise and used a mask to see if there are
+any biases when we include these effects. We noted that including noise slightly biased the to have lower A_s
+values, and so here we want to repeat our MCMC analysis of the A_s-n_s plane but now including noise. Here,
+we are still generating random shape noise inside each pixel and adding this to our convergence maps. Again,
+we are using two redshift bins to improve the accuracy of the results.
+
+#### Unmasked sky
+
+First, we looked at adding noise to the unmasked sky, which gave the following triangle plot
+
+![Triangle plot for unmasked sky with noise](figures/Likelihoods/TrianglePlots/Unmasked_noise.png)
+
+Here, we can see that including noise in the maps causes biases in both of the recovered parameters, where we
+have a lower A_s value, and a higher n_s value. This indicates that the likelihood code wants a steeper power
+spectrum with a smaller overall scale factor. The addition of noise also increases the width of the 1D marginal
+histograms, and so we expect the errors on the parameters from the maps with noise to be larger than those
+without noise.
+
+#### Masked sky
+
+We then applied adding the random noise to our masked maps, which gave the following triangle plot
+
+![Triangle plot for unmasked sky with noise](figures/Likelihoods/TrianglePlots/Masked_noise.png)
+
+Here, we can see that adding noise to our masked maps does not significantly bias the recovered parameters,
+just that their 1D marginal histograms (and thus 2D joint contour) becomes larger with noise.
+
+#### Summary table
+
+We can summarise our four runs through the following table of parameter values and their errors
+
+| Parameter      | Unmasked no noise  | Unmasked with noise | Masked no noise | Masked with noise |
+| ----------- | ----------- | ---------- | ---------- | ---------- |
+| A_s x 10<sup>9</sup> | 2.0950 ± 0.0075 | 2.090 ± 0.012 | 2.0844 ± +0.0078 | 2.085  ± 0.012 |
+| n_s | 0.9629 ± 0.0028 | 0.9649 ± 0.0050 | 0.9671 ± 0.0030 | 0.9673 ± 0.0050  |
+
+This shows that the main effect of including noise in the maps is increased error bars on both parameters,
+which shows that we are less certain on the values on the recovered parameters than we would otherwise be without
+noise.
+
+## MCMC analysis of dark energy with shape noise
+
+Previously, we looked at performing an MCMC analysis of the dark energy equation-of-state parameters for 
+unmasked and masked maps. However, these maps did not include any shape noise, which real world maps will.
+As one of the main goals for Euclid is to constrain the dark energy parameters, we want to see what the affect
+of including shape noise in our maps is. To do so, we can add random Gaussian noise to each pixel, with a mean
+of zero, and a standard deviation given by the intrinsic galaxy ellipticity value (set as 0.21) divided by the 
+square-root of the number of galaxies in each pixel. This then allows us to set a value for the noise Cl values,
+and so by including this in our likelihood code we can accurately keep track of noise in the maps.  
+Here, we include noise in our unmasked maps first, and then extend this to masked maps
+
+### Unmasked maps
+
+![Unmasked plot with noise for wa w0](figures/Likelihoods/TrianglePlots/wa_w0_noise_unmasked.png)
+
+Here, we can see that the contour for the map with noise is significantly displaced from the no noise contour.
+This shows that the maps with noise favour a cosmology with a slightly reduced w_0 (making dark energy behave
+more like matter today) by with a significantly negative w_a component. This suggests that at early times,
+the maps favour a map that has increased dark energy density in the past than what we would expect given
+its current density.  
+It is interesting to see that though the noise contour is significantly displaced from the original contour,
+they both have the same shape, and both appear to lie on the same diagonal in the w_0-w_a plane.  
+To increase the accuracy of the noise contour, more redshift bins could be used, which would further constrain
+the evolution of dark energy and tighten constraints on these parameters.
+
+### Masked maps
+
+![Masked plot with noise for wa w0](figures/Likelihoods/TrianglePlots/wa_w0_noise_masked.png)
+
+Again we see the noise contour is significantly displaced from the no noise contour, with the same general shape
+and lying on the same diagonal. The specific shape of the 1D marginal contours appears to be slightly more
+non-Gaussian for the masked maps over the unmasked maps, however both seem to peak in around the same place
+suggesting that the effects of noise is dominating over the effects of masking.
+
+
+## Full eight-parameter MCMC analysis of a convergence map
+
+Above, we have looked at much simpler two- and three-parameter models where we wanted to find the 
+maximum-likelihood values for these individual parameters alone. However, in a real analysis there will be many
+more cosmological parameters, and perhaps even a few nuisance parameters, that will need to analysed to extract
+meaningful results. Here, we attempt to do this by performing an eight-parameter analysis by exploring the
+parameter space of (A<sub>s</sub>, n<sub>s</sub>, H<sub>0</sub>, Omega<sub>b</sub> _h_<sup>2</sup>,
+Omega<sub>c</sub> _h_<sup>2</sup>, m<sub>ν</sub>, w<sub>0</sub>, and w<sub>a</sub>). To do so, we require
+a much more sophisticated MCMC algorithm over the previously used Metropolis-Hastings. While MH is good for
+basic tasks, when the number of parameters is increased MH can take an extremely long time to fully explore
+the parameter space over other tools. Here, we use the Multinest algorithm as this has been found to work
+extremely well with the number of parameters that we have, as it can provide fast and accurate MCMC results.  
+The results of the masked and unmasked map are
+
+![Eight parameter MCMC plot](figures/Likelihoods/TrianglePlots/TriangleAll.png)
+
+Here, we can see the main affect of masking the map is to significantly increase the parameter contours,
+which shows that we are less certain about the maximum-likelihood parameters for the maps with masking
+over those that are unmasked. For some contours, for example the A<sub>s</sub>-n<sub>s</sub> contour,
+the masked contour looks significantly displaced from the unmasked contour, which suggests that by masking 
+introduces light biases in the parameter values. The A<sub>s</sub>-n<sub>s</sub> contour is also interesting for
+another reason: when we looked at just A<sub>s</sub>-n<sub>s</sub> alone, we saw a strong negative correlation
+between these two parameters. However, in our full analysis the contours indicate a positive correlation
+between these two parameters, which shows that there must be new effects coming from the other parameters that
+would cause this flip.  
+For our two parameter sets, the best-fit parameters with errors are as follows
+
+| Map      | A<sub>s</sub> x10<sup>-9</sup>  | n<sub>s</sub> | H<sub>0</sub> | Omega<sub>b</sub> _h_<sup>2</sup> | Omega<sub>c</sub> _h_<sup>2</sup> | m<sub>ν</sub> | w<sub>0</sub> | w<sub>a</sub> |
+| ----------- | ----------- | ---------- | ---------- | ---------- |  ---------- |  ---------- |  ---------- |  ---------- |
+| No mask | 2.09 ± 0.21 |0.966 ± 0.020 | 69.0 ± 5.1 | 0.0208  ± 0.0065 | 0.110  ± 0.013 | 0.049 ± 0.045 | -1.006 ± 0.0042 | 0.003 ± 0.055
+| Mask | 1.96 ± 0.21 |0.964 ± 0.025 | 70 ± 8 | 0.020  ± 0.011 | 0.113  ± 0.021 | 0.072 ± 0.067 | -1.024 ± 0.0078 | 0.00 ± 0.14
+
+Hence, this shows that the largest effect of masking is to increase the error bars when looking at our 
+eight-parameter simulations. However, several parameters (notably A<sub>s</sub> and m<sub>ν</sub>) look to be slightly
+biased away from their unmasked values. 
