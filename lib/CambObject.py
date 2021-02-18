@@ -1318,7 +1318,7 @@ class CambObject:
         lmax = 1000
         ells = np.arange(2, lmax + 1)
 
-        # Lists to sotre data in
+        # Lists to store data in
         mask_cls = []
         covs = []
         covs_th = []
@@ -1344,7 +1344,8 @@ class CambObject:
             # Turn the mixing matrix into the symmetric form
             mask_matrix /= (2 * ells + 1)[np.newaxis, :]
 
-            cov_th = 2 * self.c_ells['W4xW4'][2:] * np.transpose(self.c_ells['W4xW4'][2:]) * mask_matrix
+            cov_th = 2 * self.c_ells['W4xW4'][np.newaxis, 2:lmax + 1] * self.c_ells['W4xW4'][2:lmax + 1, np.newaxis] \
+                     * mask_matrix
 
             covs_th.append(cov_th)
 
@@ -1405,9 +1406,87 @@ class CambObject:
 
         # * Now plot the numerical and theoretical form of the covariance matrices
 
+        # Here, use the MASTER code to compute it too
+        import pymaster as mst
+
+        # N_side parameter for the map to generate
+        nside = 1024
+
+        # Compute f_sky for Euclid mask
+        f_sky = euclid_mask.sum() / euclid_mask.size
+
+        # Obtain our TT convergence Cl values
+        cl_tt = self.raw_c_ells['W4xW4']
+
+        # Generate a map from our TT cl's
+        map_t = hp.synfast(cl_tt, nside, verbose=False)
+
+        # Mask the map
+        map_t = hp.ma(map_t)
+        map_t.mask = np.logical_not(euclid_mask)
+
+        # The l max that we want to recover the masked map up to (MASTER requires lmax >= Nside)
+        lmax = 3 * nside + 1
+        cl_tt = hp.anafast(map_t, lmax=lmax)
+
+        # The ell range for our Cl values
+        ells = np.arange(0, lmax + 1)
+
+        # Normalise the recovered Cl values
+        cl_tt = ells * (ells + 1) * cl_tt / (2 * np.pi)
+
+        # Implement 1/f_sky factor
+        cl_tt /= f_sky
+
+        # Use the MASTER code to compute the fields
+        field = mst.NmtField(euclid_mask, [map_t])
+
+        # We only use one l-mode per bin for the moment, to compare with previous results
+        bins = mst.NmtBin.from_nside_linear(nside, 1)
+
+        # Create a workspace, and compute the coupling matrix for the mask
+        work = mst.NmtWorkspace()
+        work.compute_coupling_matrix(field, field, bins)
+
+        cowork = mst.NmtCovarianceWorkspace()
+
+        cowork.compute_coupling_coefficients(field, field, field, field)
+
+        # Compute the Gaussian covariance matrix for our mask
+        covar_00_00 = mst.gaussian_covariance(cowork,
+                                              0, 0, 0, 0,  # Spins of the 4 fields
+                                              [cl_tt], [cl_tt], [cl_tt], [cl_tt],
+                                              work, wb=work)
+
+        # Re-define lmax here, to compare with previous results
+        lmax = 1000
+
+        # First plot just the MASTER covariance matrix
+        plt.imshow(covar_00_00[0:lmax - 1, 0:lmax - 1], cmap='inferno')
+        plt.xlabel(r'$\ell_1$')
+        plt.ylabel(r'$\ell_2$')
+        plt.title('MASTER covariance matrix')
+        plt.colorbar()
+
+        # Plot absolute difference
+        fig3, ax3 = plt.subplots()
+        im3 = ax3.imshow(covar_00_00[0:lmax - 1, 0:lmax - 1] - covs[9], cmap=make_planck_colour_map())
+        ax3.set_xlabel(r'$\ell_1$')
+        ax3.set_ylabel(r'$\ell_2$')
+        ax3.set_title(f'Difference between MASTER and numerical covariance')
+        fig3.colorbar(im3, label='MASTER - numerical')
+
+        # Plot relative difference on a log scale
+        fig3, ax3 = plt.subplots()
+        im3 = ax3.imshow(np.log10(np.abs(covar_00_00[0:lmax - 1, 0:lmax - 1] / covs[9])), cmap=make_planck_colour_map())
+        ax3.set_xlabel(r'$\ell_1$')
+        ax3.set_ylabel(r'$\ell_2$')
+        ax3.set_title(f'Relative difference between MASTER and numerical covariance matrices')
+        fig3.colorbar(im3, label=r'$\log_{10}(\textrm{Abs}[$MASTER / numerical$])$')
+
         fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(13, 10), sharey=True)
 
-        # The selected mask number (ranges from 0 to 9, with 9 being Eulcid)
+        # The selected mask number (ranges from 0 to 9, with 9 being Euclid)
         mask_idx = 9
 
         min_val = np.min([covs[mask_idx], covs_th[mask_idx]])
