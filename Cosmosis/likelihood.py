@@ -32,8 +32,9 @@ def setup(options):
         area_per_pix = 1.49E8 / n_pix  # This is the total area in arcmin^2 divided by the number of pixels
         num_gal_per_pix = avg_gal_den * area_per_pix
 
-        # Generate random Gaussian noise that will be added to our maps
-        random_noise = np.random.normal(loc=0, scale=intrinsic_gal_ellip / np.sqrt(num_gal_per_pix), size=n_pix)
+        # Generate random Gaussian noise that will be added to our maps, one set of noise for each map
+        random_noise1 = np.random.normal(loc=0, scale=intrinsic_gal_ellip / np.sqrt(num_gal_per_pix), size=n_pix)
+        random_noise2 = np.random.normal(loc=0, scale=intrinsic_gal_ellip / np.sqrt(num_gal_per_pix), size=n_pix)
 
         # Compute what the expected Cl VALUE (singular) is for the shape noise.
         theory_cl_noise = intrinsic_gal_ellip ** 2 / (avg_gal_den / (sciconst.arcminute ** 2))
@@ -45,7 +46,8 @@ def setup(options):
         # If not using noise, then theory cl values are zero, along with the random noise elements
         theory_cl_noise = np.zeros(lmax - 1)
 
-        random_noise = np.zeros(n_pix, dtype=np.bool)
+        random_noise1 = np.zeros(n_pix, dtype=np.bool)
+        random_noise2 = np.zeros(n_pix, dtype=np.bool)
 
     # Initiate a LCDM cosmology with a default cosmology
     params = camb.CAMBparams()
@@ -72,8 +74,8 @@ def setup(options):
     f_sky = euclid_mask.sum() / euclid_mask.size
 
     # Add the random shape noise to our convergence map, this is zeros if not using noise
-    converg_map1 += random_noise
-    converg_map2 += random_noise
+    converg_map1 += random_noise1
+    converg_map2 += random_noise2
 
     # Create masked map from convergence map and Euclid mask
     converg_map_mask1 = hp.ma(converg_map1)
