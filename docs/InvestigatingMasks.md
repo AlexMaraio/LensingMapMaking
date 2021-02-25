@@ -863,6 +863,40 @@ n_s of (0.925 ± 0.012), and H0 of (73.5 ± 1.2) km/s/Mpc.
 These results show that a smarter likelihood and sampler code is needed when we want to eventually extend this to 
 the number of parameters eventually required (approximately ten).
 
+### <span style="color:orange">⚠️ Follow-up note:</span>
+
+In the above triangle plot it was noted that all parameter values seemed to be significantly shifted from their
+"true" values, with A_s and n_s being considerably shifted from the previous two-parameter only case.
+Hence, we wanted to see if this result was true, or simply a result of a bug in the code that would need to be
+looked into.  
+To debug this, we first plotted the power spectrum of the map with the maximum-likelihood values found above.
+We found that these two differed significantly, and so there is no way that the above parameters were the 
+best-fit to the original map. Therefore, there must have been a slight issue in the computation of the 
+theory power spectrum, or the likelihood calculation itself.  
+The bug was found to be when we updated the H0 value in CAMB, and then computed the Cl's from that.
+Originally, we set the cosmological parameters for the `params` class through the line
+```python
+params.set_cosmology(H0=70, ombh2=0.0226, omch2=0.112, mnu=0.06)
+```
+This sets all parameters to accurate default values, which then allows us to update them as we wish. This
+was done though the following lines
+```python
+for H0_idx, H0 in enumerate(H0_vals):
+    params.set_cosmology(H0=H0)
+```
+Here, we assumed that the previously set values would not be overwritten, however they were by the default
+arguments of `ombh2=0.022` and `omch2=0.12`. This slight difference in the matter densities caused the 
+likelihood to adjust the samples parameters to account for this difference.
+
+With the fixed likelihood code, the triangle plot for our three-parameter case is
+
+![Triangle plot with H0](figures/Likelihoods/TrianglePlots/TriangleH0New.png)
+
+Here, we see that all parameter contours are much closer to their true values which shows that the bug
+in the likelihood code has been correctly fixed. We also note that the size of all contours has been 
+significantly reduced by about an order of magnitude, which shows that when we use the correctly likelihood
+the constraining power is very large.
+
 ### Improving MCMC parameter estimation using multiple redshift bins
 
 In our above MCMC analysis of recovering two and three parameters, the likelihood was only evaluated at a single
@@ -897,6 +931,37 @@ example of estimating A_s and n_s. Again, doing this for masked and unmasked map
 
 ![A_s n_s triangle plot, 2z only](figures/Likelihoods/TrianglePlots/Asns_2z.png)
 
+### <span style="color:CornflowerBlue">Follow-up notes:</span>
+
+#### Testing the grid precision
+
+In our above MCMC analysis of the A_s-n_s plane, we used a grid of 10 A_s and n_s values (giving us a total
+of 100 points) that we then interpolated over, which allowed us to easily evaluate what the Cl values are
+at any arbitrary A_s n_s value. Here, we would like to check the sensitivity of the recovered contours to 
+the number of points in our grid to see if increasing this produces tighter contours, or more accurate results.
+To do so, we evaluated the grid with 5, 10, 20, and 40 number of points in each dimension and then ran the
+MCMC analysis for 25,000 sample points. The results of this were
+
+![A_s n_s triangle plot for precision](figures/Likelihoods/TrianglePlots/As_ns_precision.png)
+
+Here, we can see that all four contours are practically lying on top of each other, only the orange curve
+representing 20 samples seems to be slightly displaced from the other three. This shows that our results seem
+to be independent of the gird resolution, which is good to know.
+
+#### Testing the sensitivity to l_max
+
+In all of our previous results, we have evaluated the theory and recovered Cl's up to an l_max of 2000. 
+While this is quite a high value, we wish to see what happens to the recovered contours when we increase this
+to 4000. This should provide us with double the number of modes, and so in theory much better constrain 
+the parameters. Additionally, as the likelihood is weighted by a factor of (2l + 1), the likelihood is far
+more sensitive to changes at high _l_ than low _l_. 
+
+![A_s n_s triangle plot for different l_max](figures/Likelihoods/TrianglePlots/As_ns_lmax.png)
+
+Here, we see the main effect of increasing l_max is to significantly tighten the contours, providing more
+precise maximum-likelihood values. This shows that we should be using the largest l_max as we can.  
+The downside to increasing l_max, though, is the increased run-time for each sample point as CAMB needs to do
+(at least) double the work per sample.
 
 ### Investigating parameter bias when masking and adding noise
 
@@ -1014,6 +1079,21 @@ and lying on the same diagonal. The specific shape of the 1D marginal contours a
 non-Gaussian for the masked maps over the unmasked maps, however both seem to peak in around the same place
 suggesting that the effects of noise is dominating over the effects of masking.
 
+#### Investigating the degeneracy between w<sub>0</sub> and w<sub>a</sub>
+
+From the above triangle plots for the dark energy parameters, it is clear that there is a strong degeneracy
+between a more positive w<sub>0</sub> and more negative w<sub>a</sub> as all contours seem to lie almost exactly
+on some sort of relation. We can look at this degeneracy by plotting the lensing power spectrum for
+our original ΛCDM model, along with our displaced version
+
+![Lensing power spec for different dark energies](figures/wCDM_w0_wa/Lensing_powerspec_new.png)
+
+Here, we can see that both models predict almost exactly the same power spectrum for both redshifts. The agreement
+is excellent for the second redshift bin (z=2), whereas the ΛCDM curve seems to be _slightly_ larger than our
+wCDM result for the first redshift bin (z=0.5). Hence, it makes sense that our MCMC results would indicate a 
+degeneracy between these two parameters, given our current redshift bins. Given that these dark energy
+parameters mostly seem to affect the evolution of the lensing power spectrum, using more redshift bins 
+could be a way to slightly break the degeneracy between the two parameters.
 
 ## Full eight-parameter MCMC analysis of a convergence map
 
@@ -1050,3 +1130,49 @@ For our two parameter sets, the best-fit parameters with errors are as follows
 Hence, this shows that the largest effect of masking is to increase the error bars when looking at our 
 eight-parameter simulations. However, several parameters (notably A<sub>s</sub> and m<sub>ν</sub>) look to be slightly
 biased away from their unmasked values. 
+
+## Eight-parameter MCMC analysis using Metropolis-Hastings
+
+Above, we looked at running MCMC runs using eight parameters, which is much more realistic than simple two- or
+three-parameter runs previously used. There, we used the Multinest sampler, as this is quick and provides accurate
+results in these higher-dimensional problems. However, we just wanted to see what would happen if we used the basic
+Metropolis-Hastings sampler, instead of much more complex ones. Here, we use the same priors, ranges, and original
+map, which gives the following contours
+
+![Eight parameter MCMC plot](figures/Likelihoods/TrianglePlots/TriangleAll_MH.png)
+
+This run was completed over around four days, completing a total of 66,000 samples (of which only around a thousand
+were accepted) before being killed. This shows that if we want to continue using the MH sampler, then we would
+have to increase the runtime significantly to sampler over many more points to obtain accurate contours.
+More realistically, however, should be the use of these complex samplers, such as Multinest or Emcee, going
+forward.
+
+## Parameter constraints from another convergence map
+
+As each convergence map is randomly generated from the true power spectrum, there exists small fluctuations
+in each individual map. This could then lead to the estimated parameters being slightly different for each map,
+which is what we want to look at here.  
+Another convergence map was generated using the same input power spectrum, and then run through our MCMC analysis
+chain to estimate A_s and n_s, with the results as
+
+### Unmasked, no noise
+
+First, the unmasked map with no noise was analysed, giving
+
+![New convergence map 2-params plot](figures/Likelihoods/TrianglePlots/Asns_new_1.png)
+
+Here, we see that while the 2D contour largely lies in the same place, the 1D marginal histograms are slightly 
+displaced from their original values. We see that our new map predicts a slightly smaller A_s, and larger n_s,
+which are both displaced from their true values.
+
+### Masked maps with noise
+
+If we now move to add shape noise to each pixel, and then mask our maps we find the following results
+
+![New convergence map 2-params plot](figures/Likelihoods/TrianglePlots/Asns_new_2.png)
+
+Here, we now see that our new map predicts almost exactly the true A_s and n_s values, when we apply noise and
+a mask. It should also be noted that the noise realisations were different between both runs, and so the shifts
+will come from both the realisation of the signal map, and the noise maps.  
+This shows that we need to be careful when simply using one, or a small number of maps, to estimate parameters
+from as we could be biasing our parameter estimates without knowing.
