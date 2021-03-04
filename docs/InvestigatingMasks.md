@@ -742,6 +742,58 @@ we look at the variances of the signal.
 It is good to see that both the EE and BB signal produce the expected behaviour in that the variances
 follow the cosmic variance prediction very well (including the deviations expected when masking).
 
+### ⚠️ Follow-up note:
+
+When we plotted the EB and BB spectrum above, we plotted all lines, which included the unmasked sky. This is
+so that way we can see how large the numerical noise is on the unmasked sky, where the actual signal should
+be zero. However, this caused the masked sky signal's to be compressed at the top of the figure, which made
+comparisons between masks difficult. Here, we now plot only the signals from actual masks, which gives us
+the following plots
+
+![EB signal new](figures/ShearEB/EB_Cl_new.png)
+
+![BB signal new](figures/ShearEB/BB_Cl_new.png)
+
+Here, we can easily see the differences in the recovered signals for the different masks. In the EB plot, 
+all four masks predict roughly the same shape, just with a different amplitude. Again, we see that it's not
+until _l_ values of around one hundred to when the EB signal is less than 1% of the EE signal.  
+The BB plot is not quite as straightforward, we see that at low _l_ it looks like all curves tend to the same 
+values, irrespective of their f_sky value. These curves then diverge as _l_ increases, but still following
+the same general trend. It is interesting to note that the light-blue line, corresponding to the Euclid mask,
+starts out with a smaller amplitude compared to the orange line (which has a roughly similar f_sky value),
+but then increases to a larger amplitude at high _l_. This shows that the extra anisotropies in the Euclid
+mask cause additional BB power on the smaller scales (where these anisotropies become important).
+
+### Ratios of EB and BB signals to the EE signal
+
+To see how the individual masks affect the amplitude of the recovered EB and BB signal, we can take the ratio
+of the recovered EB and BB signals with respect to the EE signal, which tells us how important these are
+as a function of angular scale.  
+First, let us look at the EB ratio:
+
+![Ratio of EB to EE](figures/ShearEB/Ratio_EB.png)
+
+Here, we see a figure that looks very similar to the variance plots: for large f_sky the curves are simply 
+a power law for all _l_, whereas for small f_sky, and at low _l_, the curves tend to a single value
+(which is approximately 0.5). Again, for the Euclid mask we see that we have to go to _l_ values of around 
+one hundred to have EB less than one percent of the EE signal, and then further to _l_ values of around 
+one thousand to have EB less than 0.1% of EE.  
+We can now look at the ratio of the BB signal:
+
+![Ratio of BB to EE](figures/ShearEB/Ratio_BB.png)
+
+Here, we see the same kind of curves to that for the EB signal (which is expected). However now, at low _l_ the
+curved tend to the fixed value of 1 instead of 0.5. Additionally, the Euclid curve here seems to be less like
+a single power-law, as the gradient of the line seems to change with _l_. This is probably due to the
+anisotropies in the mask contributing to the BB signal differently at different scales.  
+Finally, we can see how large the BB signal is compared to the EB signal by taking their ratios:
+
+![Ratio of BB to EB](figures/ShearEB/Ratio_BB_to_EB.png)
+
+Now while this plot is dominated by noise, the overall trend of each line is clear: all ratios are roughly
+constant between _l_ values of 100 and 1000, with a clear dependence on f_sky. All ratios have values between
+about two and three, which shows that the BB signal is slightly more important over the EB signal.p
+
 ## Improved parameter estimation from likelihoods
 
 In above sections, a very basic likelihood code was written to try to extract the As value from a given map
@@ -1176,3 +1228,100 @@ a mask. It should also be noted that the noise realisations were different betwe
 will come from both the realisation of the signal map, and the noise maps.  
 This shows that we need to be careful when simply using one, or a small number of maps, to estimate parameters
 from as we could be biasing our parameter estimates without knowing.
+
+## Parameter constraints from an ensemble of maps
+
+Above, we have shown how simply generating a new random realisation of a convergence map leads to a slight
+shift in the recovered parameters. This is because each new realisation will have a slightly different power
+spectrum, and so will impact the likelihood calculation in a random way. To overcome this randomness, we can
+use an ensemble of randomly generated convergence maps to see what the distribution of the maximum-likelihood
+values are. This allows us to compare this with the "true" input values, and so allows for a proper comparison
+between input and recovered values.
+
+For each redshift bin, we generated sixteen convergence maps and performed a likelihood analysis on each 
+of these maps independently. We can plot the individual likelihood contours as well as the combined contour
+for both redshift bins, which gives:
+
+### Redshift of 0.5
+
+![Triangle plot for the ensemble of maps](figures/Likelihoods/TrianglePlots/ManyMaps/Ensemble_050.png)
+
+### Redshift of 2.0
+
+![Triangle plot for the ensemble of maps](figures/Likelihoods/TrianglePlots/ManyMaps/Ensemble_200.png)
+
+Here, we plot the individual maps in grey, with the joint probabilities in yellow. While the individual maps
+show a large range of scatter, the combined likelihood provides a very accurate estimation of the true A_s
+and n_s values. This shows that we cannot trust the results of an individual likelihood run, and instead
+need to average over many different realisations to provide the most accurate constraints possible.
+
+#### Investigating the distribution of the maximum likelihood values
+
+Above, we have seen how the complete 2D joint and 1D marginal contours change for each random realisation
+of the convergence map. We now want to look at simply how the maximum-likelihood values are distributed with
+regards to the total combined likelihood. Here, we simply plot each individual maximum-likelihood point as
+a cross on top of the combined likelihood contour, for the _z_=0.5 redshift bin:
+
+![Triangle plot for the ensemble of maps](figures/Likelihoods/TrianglePlots/ManyMaps/Ensemble_050_markers.png)
+
+This shows that all maximum-likelihood values of the individual maps lie within the 1-sigma contour,
+which is what we expected to see.
+
+### Combined results at each redshift
+
+Now that we have an ensemble of individual likelihoods at each redshift, we can combine them to a single
+likelihood contour for each redshift, which gives
+
+![Triangle plot for the ensemble of maps](figures/Likelihoods/TrianglePlots/ManyMaps/Ensemble_redshifts.png)
+
+Here, we can see that all three contours give maximum-likelihood values that are very close to the true values,
+which shows that each individual redshift bin can accurately predict the value of A_s and n_s, without needing
+to use multiple bins.
+
+## Repeating the ensemble of maps for masking and/or noise
+
+Now that we have a method in place to produce individual results from an ensemble of randomly generated maps,
+we can extend it to including more realistic effects, such as masking the maps and adding noise. 
+
+### Masked map, no noise added
+
+First, let us simply mask each map without adding any shape noise. This gave
+
+![Masked map, no noise](figures/Likelihoods/TrianglePlots/ManyMaps/NoNoiseMasked.png)
+
+Here, we can see approximately the same dispersion when compared to the unmasked case, however a few realisations
+lie on the outskirts of the total contour.
+
+### Unmasked map, with noise added
+
+Now let us return to our unmasked maps, and add some random shape noise to each map
+
+![Unasked map, with noise](figures/Likelihoods/TrianglePlots/ManyMaps/NoiseUnmasked.png)
+
+Here, we can see that some samples feature significant deviations to lower A_s & higher n_s values compared
+to the majority of the samples. Hence, we may need to produce many more than our current sixteen realisations
+to get a full understanding of the ensemble properties of the maps that have noise added to.
+
+### Masked map, with noise added
+
+Now let us apply both a mask and add noise to our maps, which is the most realistic scenario
+
+![Masked map, with noise](figures/Likelihoods/TrianglePlots/ManyMaps/NoiseMasked.png)
+
+Here, we see that there is a significant outlier to our data, as it has a small A_s value compared to the 
+other maps. Hence, we may have to use more realisations when using masking and noise.
+
+### Summary
+
+We can compare the four different models through the following plot
+
+![Masked map, with noise](figures/Likelihoods/TrianglePlots/ManyMaps/Noise_and_masking.png)
+
+Here, we can see the two main effects:
+
+- Masking the map seems to increase the size of the contours, which leads to increased error bars on parameters.
+    The secondary effect here is to slightly bias the parameters, but this bias changes between using noise or not.
+
+- Adding noise seems to significantly shift the contours, introducing a significant bias. We also see that
+    the maps with noise have significantly larger contours, which again leads to much larger error bars on 
+    parameters.
