@@ -788,11 +788,11 @@ a single power-law, as the gradient of the line seems to change with _l_. This i
 anisotropies in the mask contributing to the BB signal differently at different scales.  
 Finally, we can see how large the BB signal is compared to the EB signal by taking their ratios:
 
-![Ratio of BB to EB](figures/ShearEB/Ratio_BB_to_EB.png)
+![Ratio of BB to EB](figures/ShearEB/Ratio_EB_BB.png)
 
 Now while this plot is dominated by noise, the overall trend of each line is clear: all ratios are roughly
-constant between _l_ values of 100 and 1000, with a clear dependence on f_sky. All ratios have values between
-about two and three, which shows that the BB signal is slightly more important over the EB signal.p
+constant between _l_ values of 100 and 1000, with a clear dependence on f_sky. All ratios are less than one,
+which shows that the BB signal is always larger than the EB signal for all our masked maps.
 
 ## Improved parameter estimation from likelihoods
 
