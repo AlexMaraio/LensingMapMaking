@@ -3970,34 +3970,38 @@ class CambObject:
 
         # Plot the BB mean
         fig1, ax1 = plt.subplots(figsize=fig_size)
-        for mask_num in range(1, 5):
-            ax1.loglog(self.ells, BB_avg['Mask' + str(mask_num)], lw=2, label=r'Mask num ' + str(mask_num),
+        for mask_num in range(1, 4):
+            ax1.loglog(self.ells, BB_avg['Mask' + str(mask_num)], lw=2,
                        c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
-        ax1.loglog(self.ells, BB_avg['Mask5'], lw=2, c='cornflowerblue')
+        ax1.loglog(self.ells, BB_avg['Mask5'], lw=2, c='cornflowerblue', label='Euclid')
 
         # Plot 1% of the expected signal
-        ax1.loglog(self.ells, exp_EE * 0.01, lw=2, label=r'Expectation', c='cyan', ls='--')
+        ax1.loglog(self.ells, exp_EE * 0.01, lw=2, c='cyan', ls='--', label=r'$1\%$ of $EE$ signal')
 
         ax1.set_xlabel(r'$\ell$')
         ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell^{\textrm{BB}} / 2 \pi$')
+        ax1.set_title('$BB$ spectrum for masked maps only')
         fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        ax1.legend()
         fig1.tight_layout()
 
         # Plot the EB RMS
         fig1, ax1 = plt.subplots(figsize=fig_size)
-        for mask_num in range(1, 5):
-            ax1.loglog(self.ells, np.abs(EB_rms['Mask' + str(mask_num)]), lw=2, label=r'Mask num ' + str(mask_num),
+        for mask_num in range(1, 4):
+            ax1.loglog(self.ells, np.abs(EB_rms['Mask' + str(mask_num)]), lw=2,
                        c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
 
-        ax1.loglog(self.ells, EB_rms['Mask5'], lw=2, c='cornflowerblue')
+        ax1.loglog(self.ells, EB_rms['Mask5'], lw=2, c='cornflowerblue', label='Euclid')
 
         # Plot 1% of the expected signal
-        ax1.loglog(self.ells, exp_EE * 0.01, lw=2, label=r'Expectation', c='cyan', ls='--')
+        ax1.loglog(self.ells, exp_EE * 0.01, lw=2, c='cyan', ls='--', label=r'$1\%$ of $EE$ signal')
 
         ax1.set_xlabel(r'$\ell$')
         ax1.set_ylabel(r'$\textrm{RMS}[\ell (\ell + 1) C_\ell^{\textrm{EB}} / 2 \pi]$')
+        ax1.set_title('$EB$ spectrum for masked maps only')
         fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        ax1.legend()
         fig1.tight_layout()
 
         # Plot the EE variance
@@ -4038,6 +4042,73 @@ class CambObject:
         ax1.set_ylabel(r'$\ell (\ell + 1) C_\ell^{ij} / 2 \pi$')
         ax1.set_title('Summary of recovered power spectra for the Euclid mask')
         plt.legend()
+        fig1.tight_layout()
+
+        # Plot the ratio of EB to EE
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+
+        for mask_num in range(1, 4):
+            ax1.loglog(self.ells, EB_rms['Mask' + str(mask_num)] / EE_avg['Mask' + str(mask_num)], lw=2,
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.loglog(self.ells, EB_rms['Mask5'] / EE_avg['Mask5'], lw=2, c='cornflowerblue', label='Euclid')
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$C_\ell^{EB} / C_\ell^{EE}$')
+        ax1.set_title('Ratio of $EB$ to $EE$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        ax1.legend()
+        fig1.tight_layout()
+
+        # Plot the ratio of BB to EE
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+
+        for mask_num in range(1, 4):
+            ax1.loglog(self.ells, BB_avg['Mask' + str(mask_num)] / EE_avg['Mask' + str(mask_num)], lw=2,
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.loglog(self.ells, BB_avg['Mask5'] / EE_avg['Mask5'], lw=2, c='cornflowerblue', label='Euclid')
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$C_\ell^{BB} / C_\ell^{EE}$')
+        ax1.set_title('Ratio of $BB$ to $EE$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        ax1.legend()
+        fig1.tight_layout()
+
+        # Plot the ratio of BB and EB to EE
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+
+        for mask_num in range(1, 4):
+            ax1.loglog(self.ells, BB_avg['Mask' + str(mask_num)] / EE_avg['Mask' + str(mask_num)], lw=2,
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+            ax1.loglog(self.ells, EB_rms['Mask' + str(mask_num)] / EE_avg['Mask' + str(mask_num)], lw=2, ls='--',
+                       c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.loglog(self.ells, BB_avg['Mask5'] / EE_avg['Mask5'], lw=2, c='cornflowerblue', label='$BB$')
+        ax1.loglog(self.ells, EB_rms['Mask5'] / EE_avg['Mask5'], lw=2, ls='--', c='cornflowerblue', label='$EB$')
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$C_\ell^{ij} / C_\ell^{EE}$')
+        ax1.set_title('Ratio of $BB$ and $EB$ to $EE$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        ax1.legend()
+        fig1.tight_layout()
+
+        # Plot the ratio of BB to EB
+        fig1, ax1 = plt.subplots(figsize=fig_size)
+
+        for mask_num in range(1, 4):
+            ax1.semilogx(self.ells, EB_rms['Mask' + str(mask_num)] / BB_avg['Mask' + str(mask_num)], lw=2,
+                         c=cmap.to_rgba(self.masks_f_sky[mask_num - 1]))
+
+        ax1.semilogx(self.ells, EB_rms['Mask5'] / BB_avg['Mask5'] , lw=2, c='cornflowerblue', label='Euclid')
+
+        ax1.set_xlabel(r'$\ell$')
+        ax1.set_ylabel(r'$\textrm{RMS}[C_\ell^{EB}] / \textrm{Avg}[C_\ell^{BB}]$')
+        ax1.set_title('Ratio of $EB$ to $BB$')
+        fig1.colorbar(cmap, label=r'$f_\textrm{sky}$')
+        ax1.legend()
         fig1.tight_layout()
 
         plt.show()
