@@ -488,6 +488,27 @@ have to increase the runtime significantly to sampler over many more points to o
 More realistically, however, should be the use of these complex samplers, such as Multinest or Emcee, going
 forward.
 
+### Metropolis-Hastings sampler with a covariance matrix
+
+In our above plot, we simply used the Metropolis-Hastings sampler on our eight-parameter model blindly without
+specifying a covariance matrix. As this worked for our two- and three-parameter runs, it was assumed that this
+would work equally well for the eight-parameter model. However, looking at the above figure it is clear to see
+that that sampler did not adequately explore the parameter space, as it did not converge to the true values.
+It is hoped that by providing the sampler with a covariance matrix it would more intelligently explore the 
+parameter space. We can estimate the covariance matrix by using the samples from the unmasked run using the
+Multinest sampler, and passing them into GetDist.  
+Here, we generated two sets of maps at the same redshifts, which allows easy comparison between the two maps:
+
+![Eight parameter MCMC plot with cov](figures/Likelihoods/TrianglePlots/All_cov.png)
+
+Here, we can see that providing the covariance matrix did not seem to change the results at a qualitative level:
+both maps provide very scatty data with no sign of proper convergence, and most contours are significantly 
+displaced from their true values. It seems that the sampler is stuck in a region with a very low H0 value, and
+a very large As value. This shows that either the input covariance matrix was incorrect, or that even with it
+the Metroplis-Hastings sampler is not suitable for our eight-parameter runs.  
+Both maps were run for about a week on Cuillin, giving around 200,000 samples for each map, and an acceptance
+rate of about 1.3%.
+
 ## Parameter constraints from another convergence map
 
 As each convergence map is randomly generated from the true power spectrum, there exists small fluctuations
@@ -614,3 +635,37 @@ Here, we can see the two main effects:
 - Adding noise seems to significantly shift the contours, introducing a significant bias. We also see that
     the maps with noise have significantly larger contours, which again leads to much larger error bars on 
     parameters.
+
+## Using the covariance matrix
+
+From previous MCMC runs, we can estimate the covariance matrix between the parameters. This gives us the estimated
+individual variances on each parameter, and the covariances between the different parameters. This covariance
+matrix can then be passed to our MCMC sampler which allows it to more intelligently pick new points in the chain,
+and so allows the sampler to find the maximum-likelihood point, and explore the parameter space, faster than it
+otherwise would be. Normally, this covariance matrix will have some cosmological dependence, however here we assume
+it to be independant.
+
+### Two parameter case
+
+We can apply the covariance matrix from our previous two-parameter runs to a new run using just two parameters
+to see if the samplers converge to the true input values faster and more accurately than before.  
+Here, we are using unmasked maps with no noise to simulate the most ideal scenarios.
+
+![Triangle plot As ns with covariance matrix](figures/Likelihoods/TrianglePlots/Asns_with_cov.png)
+
+Unfortunately, we still see that the majority of our sixteen maps predict a smaller As and larger ns value
+than their true value. The width of this distribution doesn't look to have changed compared to its previous
+width. Hence, we can say that using a covariance matrix in our simple two-parameter case causes negligible 
+effect on the recovered parameters. However, its effect on runs with more parameters still needs to be
+investigated.
+
+## Checking the likelihood is invariant between using D_l and C_l
+
+In all of our previous likelihood analyses, we have used the D_l values (which are defined as l(l+1)C_l / 2 pi)
+instead of the raw C_l values. Here, we just want to check that there is negligible difference between using
+either set of values. In the likelihood, when taking the ratio there is zero difference, but when we add the
+log of the values, using the D_l values could cause a slight bias in the likelihood values.
+
+![Cl vs Dl plot](figures/Likelihoods/TrianglePlots/Cl_vs_Dl.png)
+
+Here, we can see that there is negligible difference between using Cl or Dl, which is what we expect.
