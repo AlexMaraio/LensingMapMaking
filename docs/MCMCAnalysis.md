@@ -509,6 +509,25 @@ the Metroplis-Hastings sampler is not suitable for our eight-parameter runs.
 Both maps were run for about a week on Cuillin, giving around 200,000 samples for each map, and an acceptance
 rate of about 1.3%.
 
+## Eight-parameter runs using Emcee
+
+Above, we have seen that using the basic Metropolis-Hastings algorithm on our eight-parameter model fails to
+properly explore the parameter space, both with and without using a covariance matrix. Here, we want to use a 
+slightly more advanced sampler that's still based off of the MH algorithm called Emcee. This works by deploying
+a number of "walkers" that explore the parameter space in their individual ways, hopefully converging to the same
+chains eventually. This should give us results that are similar to our original results that used Multinest 
+to sample the space.  
+The results of using Emcee were
+
+![Eight parameters using Emcee](figures/Likelihoods/TrianglePlots/AllParamsEmcee.png)
+
+Unfortunately, the results from Emcee were not very encouraging: despite running for nearly a week gathering 
+over 275,000 samples the contours do not look like the walkers have converged at all. This is very disappointing 
+given that Emcee should be capable of exploring many multi-dimensional problems with ease, so it is sad to see 
+that it has not worked here.  
+Here, we used sixteen walkers to explore the parameter space, which should have been enough. However, we may have
+to test using more walkers, however this will natrually slow down the sampling even more.
+
 ## Parameter constraints from another convergence map
 
 As each convergence map is randomly generated from the true power spectrum, there exists small fluctuations
@@ -669,3 +688,20 @@ log of the values, using the D_l values could cause a slight bias in the likelih
 ![Cl vs Dl plot](figures/Likelihoods/TrianglePlots/Cl_vs_Dl.png)
 
 Here, we can see that there is negligible difference between using Cl or Dl, which is what we expect.
+
+## Using the correct Wishart distribution
+
+Previously, when we have tried to combine multiple redshift bins together to improve the constraining power
+of each sample, we have just added the log-likelihoods at each redshift bin together. This assumes that each
+redshift bin is independent which, of course, they aren't. This is because the evolution in the earlier redshift
+bins will affect the later redshift bins, and so they should not be treated as independent.  
+The correct way to deal with this dependant behaviour is to fully model the entire collection of maps in the 
+Wishart distribution. This is described in Section 3.2 of [`astro-ph/0604547`](https://arxiv.org/abs/astro-ph/0604547)
+where it was initially derived for polarisation maps, but can be extended to any arbitrary maps.  
+Replacing our original calculation with the Wishart one gives 
+
+![Triangle plot for Wishart distribution](figures/Likelihoods/TrianglePlots/Wishart.png)
+
+This shows very similar results to our simple naive approach of simply adding the two likelihoods together,
+which shows that it wasn't a bad approximation. We can do further work to compare how these approaches differ 
+when we extend the number of maps even more.
