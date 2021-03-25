@@ -705,3 +705,123 @@ Replacing our original calculation with the Wishart one gives
 This shows very similar results to our simple naive approach of simply adding the two likelihoods together,
 which shows that it wasn't a bad approximation. We can do further work to compare how these approaches differ 
 when we extend the number of maps even more.
+
+### ⚠️ Follow-up note:
+
+Note that the specific implementation of the Wishart distribution above was actually incorrect, unfortunately.
+This arose from how the maps at different redshifts were generated. Here, we simply generated two random
+realisations of the power spectrum at the different redshifts and recovered the power spectra independently of
+each other. This, of course, is the wrong approach as changes one map should be reflected in the subsequent
+redshift maps. This meant that the cross-correlations between the maps were only due to statistical noise, and
+not any actual physical signal present. To generate the maps with the required cross-correlations, we can
+provide the cross-spectra to HealPy in the following way 
+
+```python
+alm11, alm22 = hp.synalm([cl['W1xW1'][0:lmax+1], cl['W1xW2'][0:lmax+1], cl['W2xW2'][0:lmax+1]], new=False)
+
+cl_11, cl_22, cl_12 = hp.alm2cl([alm11, alm22]) 
+```
+
+This then correctly generates our set of alm coefficients that know about the cross-terms between the maps.
+
+Alternatively, we can instead rotate our Cl covariance matrix into an orthogonal basis where each Cl is 
+independent of the others, and simply generate two random realisations of the power spectra. To do so, we
+first need to find the eigenvectors of our covariance matrix at each *l*, diagonalise the matrix, generate
+the power spectra, and then rotate back using the inverse transform. In code, this looks like
+
+```python
+# Compute the theory covariance matrix, including off-diagional terms
+V_matrix = np.array(list(zip(*[cl[source][lmin:lmax+1] for source in WindowFuncRange(num_bins)] )))
+
+# Compute the eigenvalues & eigenvectors
+V_eval, V_evec = np.linalg.eigh(V_matrix)
+
+# Diagionalise the covariance matrix
+cov_diag = np.linalg.inv(V_evec) @ V_matrix @ V_evec
+
+# Generate a random realisation of our diagonal covariance matrix
+cl_11p = hp.alm2cl(hp.synalm(cov_diag[:, 0, 0]))
+cl_22p = hp.alm2cl(hp.synalm(cov_diag[:, 1, 1]))
+
+# Create our new diagional matrix, with zeros for the cross-correlations
+cl_p_matrix = np.array(list(zip(cl_11p, np.zeros(lmax-1), np.zeros(lmax-1), cl_22p))).reshape(lmax-1, 2, 2)
+
+# Now invert the diagionalisation process to give proper cross-correlations
+cl_p = V_evec @ cl_p_matrix @ np.linalg.inv(V_evec)
+```
+
+Now that we have two methods to compute the auto- and cross-correlation power spectra, we can compare them, which
+is shown below
+
+![Comparison of auto- and cross-power spec](figures/Wishart/WishartPowerSpec.png)
+
+Here, we can see that both methods successfully give the required auto- and cross-power spectra, which is good
+to see.  
+This correct power spectrum estimation can now then be used to compute the correct likelihood using the Wishart
+distribution.  
+Note that fixing the cross-correlations also fixed the issues I was seeing with the negative determinants in the
+signal matrix.
+
+### Applying the fixed power spectra
+
+Now that we have fixed the issues with the generation of the cross-spectra, we can repeat our Gaussian vs Wishart
+comparison to see if using the correct likelihood changes anything. Here, we have used sixteen random realisations
+per likelihood to see how things change on average
+
+#### Gaussian likelihood
+
+First, we used the Gaussian likelihood individually for the two auto-spectra and added the log-likelihoods together
+to form a combined likelihood value
+
+![Gaussian likelihood case](figures/Likelihoods/TrianglePlots/Plot_Gaussian.png)
+
+Here, we see the characteristic uniform distribution in the maximum-likelihood values for both A_s and n_s.
+However, this time it appears that the centre of this distribution is located at the true input parameters,
+which indicates that the slight bias towards lower As and higher ns values has been fixed by proper generation
+of the maps.
+
+#### Wishart likelihood
+
+We can now repear the same analysis, but this time using the full Wishart likelihood, which gives us
+
+![Wishart likelihood case](figures/Likelihoods/TrianglePlots/Plot_Wishart.png)
+
+Here, we see very similar results to the Gaussian case, which is to be expected. The only noticeable difference
+is that some Wishart contours are slightly smaller than their Gaussian counterparts, which makes sense
+as the Wishart likelihood utilises additional constraining power coming from the cross-correlations that the
+Gaussian case ignores.
+
+## Revisiting 8-parameter runs
+
+Previously, we have looked into performing MCMC runs with eight cosmological parameters, which gave very bad results
+for any sampler that wasn't Multinest. Here, we revisit running the Metropolis-Hasting's sampler but this time
+enabling functionality for it to estimate its own covariance matrix. This is important as MH uses the covariance
+matrix to help it pick new points in a more intelligent fashion, thereby exploring the parameter space faster 
+than it otherwise would.  
+Here, the sampler was run for five thousand samples to estimate the covariance matrix, and then run for a week
+to gather 250,000 samples using the derived covariance. Here, we compare how well it converged to the previous best
+result using Multinest
+
+![MH vs Multinest](figures/Likelihoods/TrianglePlots/All_MetropolisMultinest.png)
+
+Here, we have much better results than any other attempt at using the MH sampler for our 8-parameter model, 
+which is good! Many of the parameter contours seem to agree between the two samplers, which is encouraging,
+however some of them seem to be significantly displaced (especially As and m_nu). This could probably be 
+alleviated by running both samplers for longer, to ensure that proper convergence has taken place. Furthermore, 
+we can run MH for longer when it's estimating the covariance matrix, to ensure that its estimation is as accurate
+as possible.
+
+### Comparing covariance matrices
+
+Previously, we used the Multinest run to estimate the covariance matrix which was then provided to MH to speed up
+convergence, however this did not work as intended. Here, we wish to compare the covariance matrix derived from the
+MH sampler with that of Multinest's. 
+
+Here, we plot the correlation matrix for the Multinest run in the lower-left and for the Metropolis-Hastings 
+run in the upper-right
+
+![MH vs Multinest covariance](figures/Likelihoods/Cov_MultinestMetropolis.png)
+
+This shows that both correlation matrices broadly agree between the two samplers, however there are some differences:
+Multinest seems to predict stronger correlations between As, ns and the other parameters, whereas MH predicts
+stronger correlations between m_nu and the dark energy parameters over Multinest.

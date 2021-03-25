@@ -12,3 +12,9 @@ The results of this are
 
 Here, we can see that the masked power spectrum is exactly the same as the original unmasked
 power spectrum, which shows that the method is indeed lossless.
+
+If we take the average of the power spectrum for 25 maps, then we find
+
+![Averaged map](figures/Tegmark/MultipleRuns.png)
+
+
