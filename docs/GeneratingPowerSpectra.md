@@ -167,3 +167,35 @@ cl_11 = hp.alm2cl(new_alm[:, 0, 0])
 cl_12 = hp.alm2cl(new_alm[:, 0, 1])
 cl_22 = hp.alm2cl(new_alm[:, 1, 1])
 ```
+
+## Fixing cross-correlation generation issues
+
+Above, we have seen that many different methods to generate the correct cross-correlations seem to fail
+when looking at their variances, instead of just their averages. While it would appear that each of these
+methods are independent of each other, this is clearly not the case due to their consistently-wrong results.
+The only line that is consistent between each approach is our generation of the Cl prime matrix: where we initialise
+a matrix for each _l_ where the diagonal terms are our diagonal power spectra, and the off-diagonals are zero.
+This is **incorrect** as we should actually have terms present on the off-diagonal, which won't contribute to the
+average, but will increase the variance (which is what we want to see). These off-diagonal terms are generated
+through relating the individual diagonal spectra with each other. In code, this looks like
+
+```python
+cl_11 = hp.alm2cl(hp.synalm(cov_diag[:, 0, 0]))
+cl_12 = hp.alm2cl(hp.synalm(cov_diag[:, 0, 0]), hp.synalm(cov_diag[:, 1, 1]))
+cl_22 = hp.alm2cl(hp.synalm(cov_diag[:, 1, 1]))
+
+cl_matrix = np.array(list(zip(cl_11p, cl_12p, cl_12p, cl_22p))).reshape(num_l, 2, 2)
+
+# Now invert the diagionalisation process to give proper cross-correlations
+my_cl = V_evec @  cl_matrix @ np.linalg.inv(V_evec)
+```
+
+Where now we are clearly including off-diagonal terms in our `cl_matrix` object, which helps fix the problems 
+that we were seeing.  
+Correcting this gives the variances and normalised variances as
+
+![Fixed variance](figures/CrossCorrelations/FixedVariance.png)
+![Fixed normalised variance](figures/CrossCorrelations/FixedNormVariance.png)
+
+As we can see, all lines have the correct values: the auto-spectra variances are governed by the cosmic-variance,
+and the cross-correlations are predicted correctly.
