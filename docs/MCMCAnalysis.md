@@ -825,3 +825,15 @@ run in the upper-right
 This shows that both correlation matrices broadly agree between the two samplers, however there are some differences:
 Multinest seems to predict stronger correlations between As, ns and the other parameters, whereas MH predicts
 stronger correlations between m_nu and the dark energy parameters over Multinest.
+
+### Multinest runs with correct likelihood
+
+A new run using the Multinest sampler utilising 700 live points (which is approximately double what was used 
+last time) was carried out. It seems that increasing the number of live points has significantly slowed down the
+algorithm as the total number of samples generated has been significantly increased. The plot below was generated
+from a run that was running for over a week without completing. As it is still running, it is hoped that when it
+finally finishes the final output will be significantly cleaner than what is currently presented.
+
+Do note that we have also added sigma_8 and Omega_m contours to our triangle plot.
+
+![Multinest triangle plot](figures/Likelihoods/TrianglePlots/MultinestNewFixed.png)
