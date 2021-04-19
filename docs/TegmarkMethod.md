@@ -83,3 +83,37 @@ Here, we just compare the Tegmark method to the Pseudo-Cl method for our masked 
 
 Again, we see the usual differences between the two methods. We also see that the constraints are a lot tighter
 with our increased N<sub>side</sub>, which makes sense!
+
+## Investigating individual power spectra
+
+Looking at the figures above, we can say that *on average* the recovered amplitude of a masked map is smaller
+than that of its unmasked map. This makes sense as we know that masking reduces power on the largest-scales that
+the 1 / f<sub>sky</sub> correction does not fix. However, the above plots also show a few maps where the masked
+amplitude is **greater** than that of its unmasked counterpart. Here, we wish to look into the individual power
+spectra for these maps to see *why* this increase in amplitude for a masked map occurs, which is not what we would
+have expected.
+
+### Nside of 16
+
+For our maps which were generated with Nside of 16, we noted that the map corresponding to the light-blue line
+in the triangle plots had an increased As value for the masked maps (when using the Pseudo-Cl estimator).
+If we look at its power spectrum computed using the Pseudo-Cl estimator for its masked and unmasked versions,
+we get the following plot
+
+![Tegmark vs Pseudo-Cl power spec for Nside of 16](figures/Tegmark/PowerSpecPlot_16.png)
+
+Here, we see that the unmasked power spectrum has a big dip in power at _l_ = 3 for all spectra, whereas the masked
+spectra do not. Additionally, the masked spectra look slight larger at high-l too.
+
+### Nside of 32
+
+For the maps that were generated with an N_side of 32, we noted that now the pink line had a larger As value
+for the masked case over its unmasked counterpart. Again, we look at its individual power spectra to find
+
+![Tegmark vs Pseudo-Cl power spec for Nside of 32](figures/Tegmark/PowerSpecPlot_32.png)
+
+This shows that for the l=2 and l=3 modes, the unmasked power spectra is smaller than that of the masked ones.
+
+## Small bug in covariance matrix estimation
+
+![Difference between correct and wrong covariance matrix](figures/Tegmark/WrongCovaraince.png)
