@@ -117,3 +117,39 @@ This shows that for the l=2 and l=3 modes, the unmasked power spectra is smaller
 ## Small bug in covariance matrix estimation
 
 ![Difference between correct and wrong covariance matrix](figures/Tegmark/WrongCovaraince.png)
+
+## A naive implementation of band powers
+
+It is often useful to deal with band powers, which are groups of _l_ values, instead of dealing with each
+_l_ individually. This should allow us to significantly cut down on the number of operations necessary, while
+still retaining the same constraining power of the full set. Since one of the most demanding tasks with the
+quadratic maximum-likelihood estimator is computing the covariance matrix, we can significantly reduce its
+computational time by approximating that it's constant over each range of band powers. This cuts down on the 
+number of evaluations of the Legendre polynomials, which saves considerable time. A simple implementation
+of this has been performed, using 50 band powers each with 5 _l_ values in each band (and so we only have 
+one-fifth of the P(l) evaluations necessary), with the results as
+
+![Simple band power implementation](figures/Tegmark/NaiveBandPowers.png)
+
+This shows that our basic band-power estimation is pretty close to the expected values, and it looks like
+this difference decreases at higher _l_ values. It would be good to test this band-power implementation
+with higher resolution maps to see if this trend continues. 
+
+## Correlations between different _l_
+
+When using the Pseudo-Cl formalism for masked maps, we saw that there were very strong correlations between the
+Cl values at different _l_ values (most notably between _l_ and _l_ ± 2 modes). Here, we would like to see
+if there are any observable correlations between different _l_ modes when recovering a masked map using the 
+Tegmark method.  
+The results presented below are for an ensemble of 1000 random realisations of the same map.
+
+### Pseudo-Cl
+
+![Pseudo cl correlation matrix](figures/Tegmark/CorrelationsPseudoCl.png)
+
+### Tegmark method
+
+![Tegmark method correlation matrix](figures/Tegmark/CorrelationsTegmark.png)
+
+Here, we can see that the Tegmark method does not induce any observable correlations between different _l_
+modes, even when applying it to a masked map.
