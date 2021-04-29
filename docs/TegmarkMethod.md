@@ -145,11 +145,97 @@ The results presented below are for an ensemble of 1000 random realisations of t
 
 ### Pseudo-Cl
 
-![Pseudo cl correlation matrix](figures/Tegmark/CorrelationsPseudoCl.png)
+![Pseudo cl correlation matrix](figures/Tegmark/EnsembleData/CorrelationsPseudoCl.png)
 
 ### Tegmark method
 
-![Tegmark method correlation matrix](figures/Tegmark/CorrelationsTegmark.png)
+![Tegmark method correlation matrix](figures/Tegmark/EnsembleData/CorrelationsTegmark.png)
 
 Here, we can see that the Tegmark method does not induce any observable correlations between different _l_
-modes, even when applying it to a masked map.
+modes, even when applying it to a masked map. Only at very high _l_ values do we see a _slight_ hint of correlations
+between different modes, but this is most likely due to noise as these _Cl_ values are unreliable at such high
+_l_ for the given Nside. 
+
+## Statistical quantities for an ensemble of maps
+
+Here, we would like to quantify how the statistical quantities of the Cl values differ between the Pseudo-Cl and
+Tegmark methods. To do so, we will look at how the means, variances, and skewness differ between the two
+methods when compared to the Γ-function prediction for the Cl values for 5000 realisations of the masked map.
+
+### Averages
+
+Here, we take the ratio of the average Cl at each _l_ with the input values:
+
+![Ratio of averages](figures/Tegmark/EnsembleData/AvgsNorm.png)
+
+This shows that the Tegmark method correctly returns the input power spectra when averaged over many maps while
+the Pseudo-Cl method shows this characteristic drop-off at low _l_. Note that both power spectra become unreliable
+when going to large _l_ values, and so care must be taken to ensure that all recovered Cl values are reliable
+for both methods. 
+
+### Variances
+
+Here, we plot the recovered variances normalised to the Cl value squared. This allows us to easily compare 
+the recovered variances to the prediction from the cosmic variances (for the un-cut sky). Note that we produce
+two estimates for this ratio, as the variance is defined as the squared-deviation from the mean, we can compute
+this either using the numerical variance or the theoretical variance here. Since these are distinct quantities
+(especially for the PCl method), we plot both quantities here
+
+![Variances](figures/Tegmark/EnsembleData/VarNorm.png)
+
+This shows that the PCl method consistently produces a larger variance compared to the Tegmark method, which
+agrees with the cosmic variance prediction. 
+
+### Skewness
+
+We now look at the next higher-order statistic, the skewness. Here, all values are computed using the numerically
+calculated means, so there may be some small bias (especially for the PCl method)
+
+![Skewness](figures/Tegmark/EnsembleData/Skew.png)
+
+This shows that the PCl method induces some additional skewness to the Cl values that the Tegmark method does 
+not. As the Tegmark method reproduces the desired results for the mean, variances, and skewness we can say that
+it is an optimal method for recovering Cl values from their underlying  Γ-function distribution.
+ 
+## Looking at the PCl corrections
+
+Above, we have plotted the averages of 5,000 runs of the Tegmark method, and the raw Cl values with the
+naive 1/f_sky correction in place. Here, we will apply the actual Pseudo-Cl coupling matrix to the Cl values
+to get the fully-correct PCl estimation
+
+![PCl average](figures/Tegmark/EnsembleData/PClAverages.png)
+
+![PCl average](figures/Tegmark/EnsembleData/PClAveragesNorm.png)
+
+Here, we see that when we implement the PCl mode-coupling matrix the PCl estimated values agree extreemly well
+with the input power spectra.
+
+## Implementation of ECLIPSE
+
+A new implementation of the quadratic maximum-likelihood estimator called Eclipse has been proposed in a recent
+paper [2104.08528](https://arxiv.org/pdf/2104.08528.pdf). This is claimed to be the most efficient implementation
+of such QML method that currently exists. Hence, we wish to compare it to our existing Tegmark method, where we
+are comparing both the numerical results of this new algorithm and the speed.
+
+The results presented below is for a map generated with an Nside of 32, which allows us to recover the power
+spectrum up to an lmax of 95. 
+
+![QML comparison](figures/Tegmark/Eclipse/QML_comparison_32_unmask.png)
+
+Here, we plot the results using the pseudo-Cl method (both with band-powers and continuous spectra), the existing
+Tegmark method, and the new Eclipse method. We see that all three spectra agree very well for most of the _l_ range,
+only diverging above _l_ values of around 80, which is where the power spectra would be cut-off anyway.
+
+### Timings comparison
+
+While we have shown that the new Eclipse method is capable of recovering the same power spectra as the Tegmark
+method, we now need to see if it is indeed as efficient as they claim to be. Here, we look at the average run
+times for three different values of Nside for both methods. Here, we split the timings into two parts: the initial
+set-up time which is used to compute the covariance matrix, invert it, and any other operations that only need to be 
+done once, and an evaluation time for the Cl values. 
+
+![QML timings comparison](figures/Tegmark/Eclipse/QML_timings.png)
+
+This shows that while the Tegmark method is more time efficient for small values of Nside, the Eclipse method 
+thoroughly beats it at an Nside of 32. This trend continues to larger values of Nside, however reliable data has
+yet to be obtained. 
