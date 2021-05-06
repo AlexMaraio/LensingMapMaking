@@ -239,3 +239,53 @@ done once, and an evaluation time for the Cl values.
 This shows that while the Tegmark method is more time efficient for small values of Nside, the Eclipse method 
 thoroughly beats it at an Nside of 32. This trend continues to larger values of Nside, however reliable data has
 yet to be obtained. 
+
+
+## More efficient Eclipse implementation
+
+One of the most time-consuming processes for the Eclipse method is evaluating the spherical harmonics on an
+lmax^2 * npix matrix. While the SciPy spherical harmonics are fast, they start returning `NaN`s above l values
+of around 75. To overcome this, the `pyshtools` library as used as a replacement which, while accurate, were
+very much slower than the SciPy ones. To massively speed up this process, this was instead written in C++ using
+the `boost` spherical harmonics, which are both fast and accurate. Additionally, now that C++ was being used,
+the evaluations can be easily parallelized using `OpenMP` for massive performance gains. Overall, this improved
+performance by a factor of about 300!  
+Furthermore, optimisations were made to the Cl evaluation which significantly decreased the run-time too.
+For maps with an `Nside` of 64, the total run-time was about an hour, of which the majority is set up work that 
+can be precomputed once without having to do this for every map.
+
+### Unfortunate bug
+
+Unfortunately, it seems that my implementation of this Eclipse method has a major bug that when we evaluate the 
+power spectrum of a masked map, the _masked_ power spectra is returned and **not** the unmasked one! As can be
+seen below, both the Eclipse and PseudoCl give the same power spectra for the masked map...
+
+![Masked power spectra](figures/Tegmark/Eclipse/QML_comparison_32_mask.png)
+
+
+## The Fisher matrix for the Tegmark method
+
+In some papers, when evaluating the Cl values there is an explicit sum over the inverse Fisher matrix for
+different _l_ values, whereas in other methods they simply use 1/F at that specific (l, l) value. Here, we can
+evaluate the full Fisher matrix on our grid of _l_ values to see how diagonal it is and how good of an approximation
+this is.
+
+![Fisher matrix](figures/Tegmark/FisherTegmark.png)
+
+![Ratio of inverses](figures/Tegmark/RatioOfInverses.png)
+
+Here, we see that this approximation isn't really any good unfortunately.
+
+## Updated MCMC results using Tegmark vs PseudoCl
+
+Above, we saw that when we masked the PseudoCl data, the peaks of the 1D As likelihood contours moved, however
+they didn't change is size, as we would expect the masked maps to have broadened contours than their unmasked
+counterparts. To do so, we need to modify the Wishart likelihood in the following way: multiply each `nu` 
+value by a factor of `f_sky`, and then divide our `W_matrix` (which represents the theory values) by `f_sky`. 
+The results of this are
+
+![Correction vs no correction](figures/Tegmark/MCMC/PseudoClCorrection.png)
+
+![Correction vs Tegmark](figures/Tegmark/MCMC/PseudoClCorrectionVsTegmark.png)
+
+Here, we see the expected broadening of the contours when we include the correct factors of `f_sky`.
