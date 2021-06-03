@@ -289,3 +289,57 @@ The results of this are
 ![Correction vs Tegmark](figures/Tegmark/MCMC/PseudoClCorrectionVsTegmark.png)
 
 Here, we see the expected broadening of the contours when we include the correct factors of `f_sky`.
+
+## Ensemble statistics for QML methods
+
+Now that an efficient implementation of the Eclipse QML method has been made, we can start to get ensemble statistics
+for how the QML method differs from the more standard Pseudo-Cl methods.
+
+First, we wish show that the QML method is capable of recovering the input power spectrum on average. Here, we present
+results for 5,000 maps generated with an Nside of 64 which allows us to go to an ell_max of 128.
+
+![Average Cl values](figures/Eclipse/RatioOfMeans.png)
+
+This shows that both Eclipse and the NaMaster implementation of the Pseudo-Cl algorithm are capable of recovering the input
+power spectrum on average, which is good! We also note that our own implementation of the Pseudo-Cl algorithm shown in orange
+loses precision at high l values, which could be from the limited precision when computing the mixing matrix and then
+inverting it.
+
+As the major advantage of QML methods are that they claim to have a lower variance in the recovered Cl values, we can
+verify this through computing the variance ratios of the Pseudo-Cl methods to QML.
+
+![Variance of Cl values](figures/Eclipse/RatioOfVariances.png)
+
+Here, we can see that the Pseudo-Cl methods do indeed have a larger variance than QML, however this difference is quite small
+for the non-apodized mask where the standard deviation is only 5% larger. This difference increases quite a lot when we
+look at apodizing the mask, however this ratio still doesn't go above about 20% and so is a far cry from the factor ~2
+improvement that is claimed in the Eclipse paper.
+
+### Propagating power spectrum to parameter constraints
+
+As we can see that Pseudo-Cl methods predict a slightly larger variance in the recovered Cl values, we want to see if this
+slight difference has any impact on the recovered cosmological parameters. Here, we used 384 random realisations of two
+redshift maps with Nside = 64 and recovered the As values with four different methods: unmasked sky, full Pseudo-Cl
+deconvolving, Eclipse QML, and the basic 1/fsky correction only. Here, we plot the cumulative histogram of the As values.
+
+![Cumulative As histogram](figures/Eclipse/CumulativeHistogram_As.png)
+
+If we take the average of the individual means and standard-deviations, we find the following results:
+
+| Method      | As value (x10^9) |
+| ----------- | ----------- |
+| Unmasked    | 2.101 ± 0.0016 |
+| PseudoCl    | 2.111 ± 0.0025 |
+| Eclipse     | 2.107 ± 0.0026 |
+| fsky        | 2.097 ± 0.0025 |
+
+
+### Maximum-likelihood vs chain-average values
+
+So far, we have been using the chain-averaged As values to represent the "mean" As value reported. However, we could instead 
+use the maximum-likelihood As value. We can compare how these two quantities differ for both the unmasked sky and the masked
+sky using the Pseudo-Cl method.
+
+![Mean vs max-lik](figures/Eclipse/MaxLikVsAverage.png)
+
+This shows a good one-to-one relation, as indicated by the dashed green line.
