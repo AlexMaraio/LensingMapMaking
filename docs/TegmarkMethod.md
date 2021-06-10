@@ -401,6 +401,13 @@ If we look at the cumulative histogram of recovered As values for the Gaussian a
 This clearly shows that there is very little difference between the Gaussian and Wishart likelihoods for the unmasked maps,
 and we can see this positive bias in the As values for the Wishart likelihood when looking at the PCl and QML lines.
 
+If we plot the mean As values using the Gaussian likelihood vs the Wishart likelihood, we find
+
+![Wishart vs Gaussian As heatmap](figures/Eclipse/As_Heatmap_Masked_GaussVsWish.png)
+
+This shows a very clear positive bias in the mean Wishart values over the Gaussian values, as the data forms a solid
+band that is distinctively higher than the one-to-one mapping as shown in the dashed green line.
+
 We can compare the standard deviations of the recovered As values, which shows
 
 ![KDE of standard deviations of As values](figures/Eclipse/As_SigmaHist.png)
