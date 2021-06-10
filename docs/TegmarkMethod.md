@@ -343,3 +343,68 @@ sky using the Pseudo-Cl method.
 ![Mean vs max-lik](figures/Eclipse/MaxLikVsAverage.png)
 
 This shows a good one-to-one relation, as indicated by the dashed green line.
+
+## Implementing multiple redshift bins for QML
+
+So far, our QML discussion has been focused on recovering the power spectrum for a single redshift bin alone, whereas
+multiple bins needs to be considered when applying these methods to MCMC analyses. To start of with, we can extend our QML
+method to use multiple maps, but with the same covariance matrix. While this isn't the perfect scenario, it is shown that 
+while the different redshift bins have different power spectra, they are similar enough that one covariance matrix is
+sufficient for the moment. Here, we present results for 10,000 simulations.
+
+![Power spectrum for Euclid mask](figures/Eclipse/QML_comparison_Euclid64.png)
+
+Here, we see all three different methods are capable of recovering the input power spectrum nicely.  
+If we now take the ratio of the recovered power spectra to the true values for a specific redshift bin (here it's 11),
+then we find
+
+![Ratio of power spectra for bin 11, Euclid mask](figures/Eclipse/AvgRatio11_Euclid64.png)
+
+Here, we see that the _average of averages_ for the QML and apodized PseudoCl lines appear to be unbiased, however for the
+unapodized mask there seems to be some slight positive bias in the recovered Cl values.
+
+If we now look at the variances of the recovered Cl values, we can take the ratio of the standard deviations for the PseudoCl
+methods with respect to the QML values for our Euclid mask to find
+
+![Ratio of standard deviations, Euclid mask](figures/Eclipse/VariancesRatio_Euclid64.png)
+
+This shows that for both PCl methods, there is an increased variance over QML methods for all redshift bins, and this ratio
+increases when apodizing the mask. We can look at how this ratio depends on the mask by now applying the same methodology
+to the *Planck* mask, which has an f_sky of around 60% compared to the 37% of the Euclid mask.
+
+![Ratio of standard deviations, Planck mask](figures/Eclipse/VariancesRatio_Planck64.png)
+
+Here, we see that the ratio is smaller for the *Planck* mask, even dipping below one at high-*l* for the unapodized mask.
+
+## More MCMC comparisons between PseudoCl and QML
+
+Now that we know that both PseudoCl and QML methods give unbiased estimates of the power spectra for multiple redshift bins,
+we can apply these to MCMC methods that recover the As amplitude. Here, we also look at how using a Gaussian vs Wishart
+likelihood for the full- and cut-sky affects the recovery of the cosmological parameters.
+
+| Method      | Gaussian As (x10^9) | Wishart As (x10^9) |
+| ----------- | ----------- |  ----------- |
+| Unmasked    | 2.100 ± 0.016 | 2.100 ± 0.016
+| PseudoCl    | 2.102 ± 0.025 | 2.111 ± 0.025 |
+| Eclipse     | 2.099 ± 0.025 | 2.106 ± 0.025 |
+| fsky        | 2.096 ± 0.025 | 2.097 ± 0.025 |
+
+To summarise this table, for the unmasked and f_sky case (where the underlying Cl value are still described by a
+Gamma-distribution) there is negligible difference between the Gaussian and Wishart likelihoods. However, when we look
+at the PseudoCl and Eclipse cases (where the Cl distribution may not be described by a Gamma-distribution), we see that
+using the Wishart likelihood induces a positive bias in the As values.
+
+If we look at the cumulative histogram of recovered As values for the Gaussian and Wishart likelihoods, we find
+
+![Cumulative histogram of As values, two likelihoods](figures/Eclipse/As_CumulativeHistogram_GaussVsWish.png)
+
+This clearly shows that there is very little difference between the Gaussian and Wishart likelihoods for the unmasked maps,
+and we can see this positive bias in the As values for the Wishart likelihood when looking at the PCl and QML lines.
+
+We can compare the standard deviations of the recovered As values, which shows
+
+![KDE of standard deviations of As values](figures/Eclipse/As_SigmaHist.png)
+
+This clearly shows the increase in standard deviation that occurs when masking maps (due to the f_sky factor in the
+number of degrees of freedom present in both likelihoods), and that the standard deviations are broadly consistent between
+likelihoods.
