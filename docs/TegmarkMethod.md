@@ -415,3 +415,50 @@ We can compare the standard deviations of the recovered As values, which shows
 This clearly shows the increase in standard deviation that occurs when masking maps (due to the f_sky factor in the
 number of degrees of freedom present in both likelihoods), and that the standard deviations are broadly consistent between
 likelihoods.
+
+## Trouble with the Fisher matrix
+
+It was seen above that when looking at the Planck mask, the ratios of the standard deviations for PCl to QML were less than one
+at high-l values. Now this does not make sense as QML methods are *optimal* and so should have the smallest error bars
+possible. If this ratio is less than one, then somehow the Pseudo-Cl method is returning smaller errors than our more-optimal
+estimator, which seems to indicate that there's an error in our QML code.
+
+To try to identify this problem, we can first try to run our estimators on the full-sky, where both should return the cosmic
+variance for the Cls.  
+First, let us look at the normalised variances for the full-sky, where we are evaluating the covariance matrix up to an
+l<sub>max</sub> of 132 for a map with N<sub>side</sub> of 32:
+
+![Norm variances 132](figures/Eclipse/Fisher/Variances_FullSky32_132-1.png)
+
+This shows that both methods follow the cosmic variance closely, along with the inverse-Fisher matrix providing a good
+estimation for the variances too.  
+If we now take the ratio of PCl to QML, we find
+
+![Norm variances 132](figures/Eclipse/Fisher/VariancesRatio_FullSky32_132-1.png)
+
+This shows what we have seen before: this ratio becomes less than one at large l-values, however now it *clearly* occurs
+when _l_ is larger than N<sub>side</sub>.
+
+If we now increase the l<sub>max</sub> in building the covariance matrix to 320, we find
+
+![Norm variances 320](figures/Eclipse/Fisher/Variances_FullSky32_320-1.png)
+
+While this shows the Eclipse method following the PCl line much closer, we also see that the inverse Fisher matrix
+is wildly off the expected (and numerically recovered) full-sky errors. As this issue wasn't present at the smaller
+l<sub>max</sub>, this indicates that there could be an error in our Fisher matrix construction that could be leading to
+this increased error effect.
+
+![Norm variances 132](figures/Eclipse/Fisher/VariancesRatio_FullSky32_320-1.png)
+
+Looking at the ratios, we see that they are very much smaller than the previous case, however still exhibiting this decrease
+at large _l_ values, even though this is a sub-percent level effect.
+
+Interestingly, if we plot the diagonal of the Fisher matrix verses the diagonal of the covariance matrix for the recovered
+y<sub>l</sub> values (which should be the same thing, see Eq. 26 of Tegmark paper), then for our two different l<sub>max</sub>
+cases, we find
+
+![Fisher ratio 132](figures/Eclipse/Fisher/DiagFisherYlRatio_FullSky32_132-1.png)
+![Fisher ratio 320](figures/Eclipse/Fisher/DiagFisherYlRatio_FullSky32_320-1.png)
+
+Which again shows that as we increase l<sub>max</sub> our estimation of the Fisher matrix becomes worse, which seems
+counter-intuitive. 
