@@ -462,3 +462,72 @@ cases, we find
 
 Which again shows that as we increase l<sub>max</sub> our estimation of the Fisher matrix becomes worse, which seems
 counter-intuitive. 
+
+## Fixing the Fisher matrix
+
+Above, we have seen that as we increase the maximum ell value to compute the covariance matrix, our Fisher matrix
+becomes increasingly larger than what we expect. This was found to be from aliasing where we are evaluating the
+spherical harmonics for ell values that are larger than 3 * N<sub>side</sub> - 1, and so were not properly defined.
+However, if we restricted the maximum ell value when computing the covariance matrix to 3 * N<sub>side</sub> - 1,
+then it was found that the covariance matrix was singular and thus non-invertible. This was because the dimension of
+the covariance matrix was greater than its rank, and so is singular. To regularize the covariance matrix, we can add
+a slight amount of noise, which contributes only along the diagonal, which acts to make the covariance matrix invertible.
+Since we only need to add a _very slight_ amount of noise, this has very little impact on the recovered Cl values.
+To illustrate this, we can plot the recovered Cl values and the input noise spectra, to find
+
+![QML with noise added](figures/Eclipse/Fisher/QML_comparison_Euclid128-1.png)
+
+Here, we see that the noise is many orders of magnitude smaller than our input signal, but still allows for the
+covariance matrix to be invertible, which is what we desire.  
+We can see how this change affects the variances and the inverse-Fisher matrix, as follows:
+
+![QML with noise variances](figures/Eclipse/Fisher/VariancesEuclid64WithSmallNoise.png)
+
+This shows that our inverse-Fisher matrix is a good reflection of the variances in the Cls, and that our QML method
+has a smaller variance over the Pseudo-Cls.
+
+## Using the wrong input power spectra in covariance matrix
+
+When evaluating the covariance matrix, we have to specify our "best guess" at the underlying power spectra. If this
+input spectra is wrong, then it could lead to slight biases in the recovered power spectra, which we want to avoid.  
+Here, we look at a scenario where we are generating a convergence map for a redshift of z=0.5, but providing the
+input spectra for a map at z=1.5 to see if we are sensitive to any basis that this may induce. If we compare the
+map power spectra with our covariance spectra, we find
+
+![Power spectra for wrong cov](figures/Eclipse/Fisher/QML_wrong_cov_Cls.png)
+
+As we can see, the recovered QML values do a good job at recovering the map's power spectrum given our wrong input
+spectra, but to see the bias in more detail we can take the ratio
+
+![Power spectra for wrong cov ratio](figures/Eclipse/Fisher/QML_wrong_cov_ClsRatio.png)
+
+Here, the dark blue line are the average Cls for our wrong covariance matrix, and this shows that we have induced about
+a 2% positive bias to the Cl values, over the true covariance ones. Looking at the variances, we find
+
+![Power spectra for wrong cov variances](figures/Eclipse/Fisher/QML_wrong_cov_ClsVar.png)
+
+This also shows that we have increased our variances by a factor of around 1-2%.  
+Hence, to avoid inducing any additional biases, we should aim to evaluate the covariance matrix independently for each
+combination of redshift bins.
+
+## Extending QML to polarisation
+
+So far, we have been exclusively looking at spin-0 convergence maps, which makes a lot of the computations easier than
+their spin-2 polarisation (shear) counterparts. The first challenge is to form our new **Y** matrix, as it is now
+formed of spin-weighted spherical harmonics instead of their scalar counterparts. The `spherical` library was found
+to be exceptionally fast and accurate at computing these, as they are computed in terms of *quaternions*, which made
+the process of evaluating them very easy. The largest and most challenging change was the algebra and matrix
+multiplications that are necessary to evaluate the QML method. While I am satisfied with the EE spectra implementation,
+the EB and BB spectra do not seem to be fully working yet. 
+
+So far, the results for the EE spectra for my own custom implementation are very encouraging!
+
+![EE average ratio](figures/Eclipse/ShearEB/EE_avgratio-1.png)
+
+This shows that my own implementation successfully recovered the input EE spectra for the entire ell range considered.
+Here, we had an N<sub>side</sub> of 32, so an l<sub>max</sub> of 95.
+
+![EE variance ratio](figures/Eclipse/ShearEB/EE_varratio-1.png)
+
+We also see that our QML implementation has a smaller variance over the Pseudo-Cl implementation with a factor of around
+30% improvement.
