@@ -69,3 +69,54 @@ which simply averages over the smaller pixels to form the larger pixel's value. 
 on small scales, which we would like to keep in our maps:
 
 ![Diff N_side Cls](figures/Cl_NsideAvg_ratio.png)
+
+## More spatially varying noise levels
+
+The major source for spatially varying noise levels comes from the fact that we will have varying number of galaxies
+per square arc-minute over the sky. Here, we wish to model this in a more accurate way, instead of a simple 
+hemispherical noise model. To do so, we use the Dark Energy Survey's Year-3 footprint and estimate that it has a total
+galaxy density of 6 per square arc-min, split between three redshift bins. We then add a Hyper Suprime Cam-like 
+experiment in the northern hemisphere, where they can observe around 20 galaxies per square arc-min, again equally split
+between three redshift bins. When we divide up the sky in this way, we end up with a mask that looks something like
+
+![DES-Euclid like mask](figures/Eclipse/DES_Noise/DES_Euclid_mask_64.png)
+
+Here, we are including a slight asymmetry in the northern hemisphere too, for additional effects.  
+With this sky map in place, we can generate a random noise realisation to this specification, which gives us
+
+![Noise map for DES-Euclid](figures/Eclipse/DES_Noise/NoiseMap_Q-64.png)
+
+Here, we see the much larger amplitude of the noise for the DES-like area and smaller values for the HSC-like area.
+
+With these noise maps in place, we can now generate an ensemble of maps and recover their power spectra when we add 
+noise:
+
+![Average EE spectra](figures/Eclipse/DES_Noise/EE_Avg.png)
+
+As we see, our QML methods manage to successfully recover the average power spectrum, even with this asymmetric noise.
+
+![Variance ratios EE spectra](figures/Eclipse/DES_Noise/EE_VarRatio.png)
+
+Interestingly, we see that the variance ratio of PCl to QML increases again as we go to higher-l values which was not
+seen before. This could come from the fact that the noise power spectra starts to become as large as the signal, and so
+the asymmetry causes problems in the PCl method.
+
+### Propagating this to parameter constraints
+
+Now that we have seen that the PCl variance is larger for some redshift bins at high-l values, this indicates that 
+the recovered parameter constraints could also be impacted from this larger variance. 
+
+
+#### As-ns
+
+![As contour](figures/Eclipse/DES_Noise/As_KDE-1.png)
+
+![ns contour](figures/Eclipse/DES_Noise/ns_KDE-1.png)
+
+![As-ns contour](figures/Eclipse/DES_Noise/Asns_KDE-1.png)
+
+#### w0-wa
+
+![w0 contour](figures/Eclipse/DES_Noise/w0_KDE-1.png)
+![wa contour](figures/Eclipse/DES_Noise/wa_KDE-1.png)
+![w0-wa contour](figures/Eclipse/DES_Noise/w0wa_KDE-1.png)
