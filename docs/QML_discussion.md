@@ -120,3 +120,31 @@ the recovered parameter constraints could also be impacted from this larger vari
 ![w0 contour](figures/Eclipse/DES_Noise/w0_KDE-1.png)
 ![wa contour](figures/Eclipse/DES_Noise/wa_KDE-1.png)
 ![w0-wa contour](figures/Eclipse/DES_Noise/w0wa_KDE-1.png)
+
+## Extending QML to galaxy counts - TEB spectra
+
+So far in my look into QML methods, I have studied convergence only (T) and cosmic shear only (EB) maps individually.
+However, as data will also be taken for the galaxy number count statistics, which is a scalar spin-0 field, we need to
+extend my current spin-2 only analysis to cope with the full cross-spectra TEB analysis. As the prescription for how to
+do this is already detailed in the Eclipse method paper, it is just a case of extending my code to deal with another map.
+Here, we expect signal in only three of the six unique spectra for a single redshift bin: TT, TE, and EE. There should
+be no signal in the BB, TB, or EB spectra as parity should be conserved in cosmic shear. However, once we extend this
+to two redshift bins then things get significantly more complicated as now we have cross-spectra between different
+redshift bins that depends on their specific combinations (e.g. the signal of T1 with E2 is not the same as the signal
+of T2 with E1). 
+
+If we look at the ten theory spectra arising from two redshift bins, along with some of the recovered spectra from two
+maps, we find
+
+![Shear TEB theory spectra](figures/ShearTEB/TEB_theory_spectra.png)
+
+Here, we see a wide range in the magnitudes of the signal, and where some of the recovered spectra follow the theory
+line closely whereas others do not (or only in the high-ell range, such as the T1xT2 signal).
+
+Recovering the average spectra for many maps with Nside of 32 using my TEB pipeline, gives
+
+![TT average](figures/ShearTEB/TT_Avg.png)
+
+![EE average](figures/ShearTEB/EE_Avg.png)
+
+![TE average](figures/ShearTEB/TE_Avg.png)
