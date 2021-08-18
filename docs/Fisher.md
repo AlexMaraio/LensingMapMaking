@@ -49,3 +49,12 @@ contour is, and gives
 
 This shows that the FoM increases with some power-law as a function of the maximum ell-mode available, and so for any
 analysis it is important to include as many ell-modes as possible.
+
+## Pseudo-Cl vs QML for parameter constraints
+
+Here, we are taking the Cl Fisher matrix for the QML method and the Gaussian covariance matrices for the Pseudo-Cl
+method as the Cl covariance matrices for our two different methods and running them through my parameter Fisher pipeline.
+Here, we are using both the QML method where we have used the (very costly) analytic Fisher matrix and the approximation
+of the Fisher matrix using the covariance matrix of the y<sub>_l_</sub> values.
+
+![Fisher matrix comparison for PCl vs QML](figures/Fisher/Fisher_3x2pt_PClQML_32.png)
