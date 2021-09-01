@@ -58,3 +58,54 @@ Here, we are using both the QML method where we have used the (very costly) anal
 of the Fisher matrix using the covariance matrix of the y<sub>_l_</sub> values.
 
 ![Fisher matrix comparison for PCl vs QML](figures/Fisher/Fisher_3x2pt_PClQML_32.png)
+
+## Properly implementing the Cl Fisher matrix
+
+In my previous QML calculations, I used a naive assumption that the Cl values for a spectra XY was composed of the 
+y_l values for that spectra deconvolved with the specific Fisher matrix elements belonging to XY. This is not the case,
+as the Cl values for any spectra are a result of the deconvolution of the _entire_ array of y_l values with the **full**
+Fisher matrix. My approximation works in the noise-dominated case, as seen before, as then the off-diagonals in the
+Fisher matrix are suppressed. With the full pipeline now in place, the results for the Cl variances are as follows:
+
+### TT
+
+![Var of the TT](figures/ShearTEB/TT_VarRatio.png)
+
+### EE
+
+![Var of the EE](figures/ShearTEB/EE_VarRatio.png)
+
+### TE
+
+![Var of the TE](figures/ShearTEB/TE_VarRatio.png)
+
+Ignoring the right-hand edge of all these plots, where we are above _l_ > 2 * N<sub>side</sub>, we see that the ratio 
+of the variances for all three non-zero spectra are consistently above one, which indicates that QML might not tend to
+the Pseudo-Cl estimator at high _l_ values, as previously thought. Hence, it is important to push our QML estimators to
+larger and larger resolutions to see if this trend continues, or the ratio decays to one eventually.
+
+## Propagating the correct variances to constraints on dark energy
+
+Now that my QML pipeline is working correctly for one redshift bin, we can compute the Fisher matrix for the dark
+energy parameters up to an _l_<sub>max</sub> of 128, giving us
+
+![Dark energy Fisher, with correct vars](figures/Fisher/Fisher_3x2pt_TEB_Masked.png)
+
+Here we see moderately decreased contours for the QML method over Pseudo-Cls, which we would expect from looking at
+the variances alone. However, it is to be noted that the Fisher matrix calculation uses the variances and covariances
+of all combinations of Cls, and thus even though the variances of the Cl values may be smaller for QML over PCl,
+the off-diagonal terms in the Cl covariance matrix still need to be studied.
+
+## Comparisons of the Figure-of-Merit for different spectra and N<sub>side</sub>
+
+Now that I have a pipeline that can produce estimates of the dark energy Figure-of-Merit (FoM) for different spectra
+(TT only, EE only, TT EE and TE combined), we can investigate how the FoM changes with resolution for these different 
+probes:
+
+![Dark energy figure-of-merit for different spectra](figures/Fisher/DarkEnergyFoM_Nside.png)
+
+Here we see some interesting behaviour: on a log-log plot it appears that the FoM increases linearly with the
+resolution of the map, with QML being slightly more constraining than PCl - though the difference shrinks with 
+resolution. We also see that initially, the TT spectra were more constraining than the EE modes, however they both
+converg to the same accuracy when increasing the resolution.
+
