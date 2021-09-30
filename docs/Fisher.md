@@ -109,3 +109,44 @@ resolution of the map, with QML being slightly more constraining than PCl - thou
 resolution. We also see that initially, the TT spectra were more constraining than the EE modes, however they both
 converg to the same accuracy when increasing the resolution.
 
+## Fisher forecasts using numerical Cl-Fisher matrices
+
+Now that we have an implementation of our numerical Fisher matrices, we can extend our analysis of how the figure of
+merit changes between QML and PCl to larger values of Nside.
+
+### The number of maps doesn't seem to matter
+
+When computing the Fisher matrix via finite-differences, it is essential to average over enough maps to get an accurate
+prediction for the Cl Fisher matrix. If we look at using only five maps, we can take the ratio of the numerically-estimated
+and the analytically-evaluated Cl-Fisher matrices, to get
+
+![Ratio of Fisher matrices using 5 maps](figures/FiniteDiffFisher/FisherRatio_5maps.png)
+
+Here, we can see that these ratios are quite large, with over a ±60% error, which is not very precise at all! However,
+if we increase the number of maps to five hundred (and thus increase the computational time by a factor of one hundred),
+we find the accuracy of the obtained Fisher matrix is vastly improved:
+
+![Ratio of Fisher matrices using 500 maps](figures/FiniteDiffFisher/FisherRatio_500maps.png)
+
+Here, we see an order of magnitude decrease in the ratio, which shows that it's much more accurate.
+
+Knowing that the Cl-Fisher matrix's accuracy vastly improves when averaging over more maps, we can ask if this difference
+propagates into the parameter's Fisher matrix. Surprisingly, we find that it makes an almost negligible difference here
+when comparing 5 and 500 maps:
+
+![Comparison of param-Fisher for 5 vs 500 maps](figures/FiniteDiffFisher/FisherComparison_nummaps.png)
+
+Here, we see that all parameter contours are practically on top of each other, and thus we can use only a handful of
+maps to average over.
+
+### Extending Nside
+
+Previously, we were limited by RAM constraints to maps with Nside 64 or less. However, we can extend to at least an
+Nside of 128 using our new method, giving:
+
+![Parameter Fisher matrices](figures/FiniteDiffFisher/ParamFisher_QML_vs_PCl.png)
+
+![Figure of merit vs Nside](figures/FiniteDiffFisher/FoM_vs_Nside.png)
+
+
+
