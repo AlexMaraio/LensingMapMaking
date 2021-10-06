@@ -149,4 +149,27 @@ Nside of 128 using our new method, giving:
 ![Figure of merit vs Nside](figures/FiniteDiffFisher/FoM_vs_Nside.png)
 
 
+## Looking at the diagonals of the Fisher matrix
+
+Above, we have seen that as we increase the number of maps that we average over, the accuracy of numerical Cl-Fisher
+matrix improves. Here, we specifically want to see how the diagonal values (which carry most of the signal in the
+Fisher matrix) responds to an increase in the number of maps used:
+
+![Diagonal of Cl-Fisher](figures/FiniteDiffFisher/FisherDiag_64.png)
+
+![Ratio of diagonal of Cl-Fisher](figures/FiniteDiffFisher/FisherDiagRatio_64.png)
+
+Here, we can see that the noise gradually decreases with _l_, and indicates that at high-_l_ (where the signal is 
+largest), we are more accurate.
+
+## Figure of merit for dark energy
+
+Here, we want to see how the figure of merit (FoM) changes as a function of N_side between QML and PCl using different
+apodization scales:
+
+![FoM vs N_side](figures/FiniteDiffFisher/FoM_vs_Nside_w0wa.png)
+
+![FoM vs N_side ratio](figures/FiniteDiffFisher/FoM_vs_Nside_w0wa_ratio.png)
+
+Here, we see that when we apodize the mask we get a roughly constant ratio between PCl and QML.
 
