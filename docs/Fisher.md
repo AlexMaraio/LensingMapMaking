@@ -173,3 +173,25 @@ apodization scales:
 
 Here, we see that when we apodize the mask we get a roughly constant ratio between PCl and QML.
 
+## Using correct cosmic shear signal
+
+As previous parts of my code used the 'TT' spectra as galaxy number counts for use in a 3x2pt analysis, this was used
+when going to a single scalar field map instead of the convergence signal. These two spectra are quite different, as
+shown in the plot below:
+
+![Correct and wrong TT signals](figures/FiniteDiffFisher/TT_EE_Cls.png)
+
+Here, we can see that the previously used signal was much larger than the correct signal, which meant that the 
+signal-to-noise ratio was much larger than it should have been. Thus, when computing the conjugate-gradient of the 
+covariance matrix, the signal-to-noise ratio term was far more dominant than it should have been - and thus taking a 
+lot longer to converge.  
+With the correct signal in place, the signal-to-noise ratio is much lower and so the covariance matrix becomes more
+diagonal, thus easier to invert and so takes less time to converge. This allows us to push the resolution much further
+than it was previously able to do; here we go to an Nside of 512 (taking over 15 hours to do so, though) with 1024 being
+potentially possible.
+
+![Param Fisher using Nside of 512](figures/FiniteDiffFisher/ParamFisher_N512_combined.png)
+
+At this resolution, we see a dramatic effect of apodizing the mask, even only on a scale of a single degree 
+**when using the additional star mask**.
+
