@@ -195,3 +195,74 @@ potentially possible.
 At this resolution, we see a dramatic effect of apodizing the mask, even only on a scale of a single degree 
 **when using the additional star mask**.
 
+## Extending numerical Fisher estimate to EB shear
+
+Now that I have an accurate way to estimate the Cl-Fisher matrix for our spin-0
+TT field, this can be easily extended to compute the Fisher matrix for our spin-2
+EE, EB, and BB fields. 
+
+### Comparing numerical values to analytic result
+
+First, we want to check that the extension of my C++ code to deal with the
+spin-2 fields is correct, through checking that the numerical values roughly
+agree with the analytic result. 
+
+![Ratio of numerical to analytic Fisher matrix](figures/FiniteDiffFisher/Spin2/NumericalFisherFull_AnalyticRatio_N64.png)
+
+Here, we inject power into modes along the x-axis, and then measure the response
+in the modes on the y-axis, averaged over five realisations. Note that we can't
+inject power into just the EB modes when we have no B-modes, and so their 
+numerical values are very close to zero.  
+This shows that our EE- and BB-mode estimation are pretty good, as their ratios
+are very close to one, with what looks like random noise populating their 
+matrices.
+
+### Extending to Nside of 256
+
+Now that we have verified that our code is working, we can extend it to an
+Nside of 256, which took about ten hours to compute:
+
+![Full numerical Fisher matrix](figures/FiniteDiffFisher/Spin2/NumericalFisher_N256.png)
+
+Since the results for the EB-modes are very unreliable, as they have a magnitude
+that is many orders of magnitude smaller than the other two modes, we can
+restrict our Fisher matrix to just EE and BB modes:
+
+![Cut-down numerical Fisher matrix](figures/FiniteDiffFisher/Spin2/NumericalFisherCut_N256.png)
+
+Here, we have also explicitly symmetrised the Fisher matrix by adding its 
+transpose and dividing by two, which makes it numerically invertible. 
+
+### Comparing with Pseudo-Cl coupling matrices
+
+We can now compare our inverse Fisher matrix to the Pseudo-Cl coupling matrix 
+as computed from NaMaster, which for the full EE & BB matrix gives us 
+
+![Ratio of PCl coupling mat to inverse numerical Fisher matrix](figures/FiniteDiffFisher/Spin2/PCl_invFisher_ratio_N256_E0_B0.png)
+
+This shows that the covariances are generally much larger for the Pseudo-Cl's 
+vs our QML ones, especially at low l values and for the EB & BB modes in
+particular. To get an idea of how the variances differ between our two methods,
+we can simply take the diagonal of our individual covariance ratios, which gives
+
+![Diag-ratio of PCl coupling mat to inverse numerical Fisher matrix](figures/FiniteDiffFisher/Spin2/PCl_invFisher_ratiodiag_N256_E0_B0.png)
+
+Here, we see the very large increase in errors for the EB spectra, and that 
+the auto-spectra of EE and BB tend to a constant value, which is due to the 
+apodisation of the mask.
+
+#### Purifying B-modes
+
+If we now enable B-mode purification, then we find the Pseudo-Cl coupling matrix
+is significantly modified, which gives our ratio & diagonal values as
+
+![Ratio of PCl coupling mat to inverse numerical Fisher matrix w/ B-mode purify](figures/FiniteDiffFisher/Spin2/PCl_invFisher_ratio_N256_E0_B1.png)
+
+![Diag of ratio of PCl coupling mat to inverse numerical Fisher matrix w/ B-mode purify](figures/FiniteDiffFisher/Spin2/PCl_invFisher_ratiodiag_N256_E0_B1.png)
+
+Here, we see much larger errors induced in both the EE and BB spectra when
+purifying the B-modes, especially at low-l, and then tend to the same value
+(which, again, is due to the requirement of apodisation to use B-mode 
+purification). For context, the variance ratio of just the TT spectra is
+
+![Diag of ratio of PCl coupling mat to inverse numerical Fisher matrix - T only](figures/FiniteDiffFisher/Spin2/PCl_invFisher_ratiodiag_N256_T.png)
