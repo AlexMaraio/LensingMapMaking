@@ -59,3 +59,24 @@ estimate for cases with fewer number of samples.
 Here, we see that the parameter contours for the numerical case are slightly increased for the case where we now
 include this small correction, and so see the numerical contours tend to the analytic ones. Hence, we should include
 this factor in all future analyses of numerical covariance matrix estimates.
+
+## Properly including star masks
+
+For a while now, I've been dealing with problems induced when stars are included in the mask. See [this issue on the
+NaMaster GitHub page](https://github.com/LSSTDESC/NaMaster/issues/152) for detailed plots and discussion of the issue.
+
+One way to fix this problem is to apodize the main mask, and then apply the binary star mask on top of this. This yields
+good results, as shown below:
+
+![EE Cl ratio](figures/ResultsNew/StarMasks/Avg_EE_ratio.png)
+
+![BB Cl ratio](figures/ResultsNew/StarMasks/Avg_BB_ratio.png)
+
+![EE_EE Cl variance ratio](figures/ResultsNew/StarMasks/Diag_EE_EE_ratio.png)
+
+![BB_BB Cl variance ratio](figures/ResultsNew/StarMasks/Diag_BB_BB_ratio.png)
+
+![Parameter Fisher results](figures/ResultsNew/StarMasks/ParamFisher_N256_OmS8H0_n1255_paper.png)
+
+![Mask power spectrum](figures/ResultsNew/StarMasks/Masks_powerspectrum.png)
+
